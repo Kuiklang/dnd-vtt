@@ -5,6 +5,7 @@ import type { CharacterFull, CharacterSummary } from "../../lib/types";
 import { Badge, Button, ErrorBanner, Loading } from "../../components/ui";
 import { Avatar } from "../../components/Avatar";
 import { CharacterSheet, type SheetRoll } from "./CharacterSheet";
+import type { SheetActions, SheetTable } from "./SpellActions";
 
 export type SaveStatus = "saved" | "unsaved" | "saving" | "error" | "offline" | "conflict";
 
@@ -132,9 +133,14 @@ export function SaveIndicator({ status, error, onRetry, onReload }: { status: Sa
 }
 
 /** Standalone loader used in the lobby modal. */
-export function CharacterSheetLoader({ characterId, onRoll, rollTarget }: { characterId: string; onRoll: (r: SheetRoll) => Promise<unknown>; rollTarget: "campaign" | "local" }) {
+export function CharacterSheetLoader({ characterId, onRoll, rollTarget, table }: { characterId: string; onRoll: (r: SheetRoll) => Promise<unknown>; rollTarget: "campaign" | "local"; table?: SheetTable }) {
   const draft = useCharacterDraft(characterId);
   const c = draft.character;
+  // Mirrors the server's rule: your own active character, or a campaign NPC for the DM.
+  const canAct =
+    !!table && !!c && c.access !== "summary" && c.access !== "view" &&
+    ((c.id === table.myCharacterId && c.ownerId === table.myUserId) || (c.campaignId === table.campaignId && table.canManageNpcs));
+  const actions: SheetActions | undefined = canAct ? { table: table!, characterId, before: draft.flush, after: () => void draft.reload() } : undefined;
   if (draft.loadError) return <ErrorBanner message={draft.loadError} onRetry={draft.reload} />;
   if (!c) return <Loading />;
   if (c.access === "summary") return <SummaryCard c={c} />;
@@ -145,7 +151,7 @@ export function CharacterSheetLoader({ characterId, onRoll, rollTarget }: { char
           <SaveIndicator status={draft.status} error={draft.saveError} onRetry={draft.flush} onReload={draft.reload} />
         </div>
       )}
-      <CharacterSheet character={c} editable={c.access !== "view"} onChange={draft.update} onRoll={onRoll} rollTarget={rollTarget} />
+      <CharacterSheet character={c} editable={c.access !== "view"} onChange={draft.update} onRoll={onRoll} rollTarget={rollTarget} actions={actions} />
     </div>
   );
 }

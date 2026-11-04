@@ -1,7 +1,9 @@
 import { useRef, useState } from "react";
+import { useAsync } from "../../lib/useAsync";
+import type { AudioTrack, Playlist } from "../audio/types";
 import { GRID_TYPES, type GridSettings } from "@vtt/rules";
 import { Badge, Button, Field, Input, Select, Textarea, cx } from "../../components/ui";
-import { errorMessage } from "../../lib/api";
+import { api, errorMessage } from "../../lib/api";
 import { IMAGE_ACCEPT, uploadImage } from "../../lib/upload";
 import { toast } from "../../stores/toast";
 import { useT } from "../../i18n";
@@ -109,15 +111,17 @@ function SceneSettings({ scene, table, campaignId }: { scene: SceneDto; table: T
   const [notes, setNotes] = useState(scene.dmNotes ?? "");
   const [w, setW] = useState(scene.width);
   const [h, setH] = useState(scene.height);
+  const [music, setMusic] = useState(scene.music ? `${scene.music.kind}:${scene.music.id}` : "");
   const [busy, setBusy] = useState(false);
+  const lib = useAsync(() => api.get<{ tracks: AudioTrack[]; playlists: Playlist[] }>(`/api/campaigns/${campaignId}/audio`), [campaignId]);
   const fileRef = useRef<HTMLInputElement>(null);
   const dirty =
-    JSON.stringify(grid) !== JSON.stringify(scene.grid) || name !== scene.name || notes !== (scene.dmNotes ?? "") || w !== scene.width || h !== scene.height;
+    JSON.stringify(grid) !== JSON.stringify(scene.grid) || name !== scene.name || notes !== (scene.dmNotes ?? "") || w !== scene.width || h !== scene.height || music !== (scene.music ? `${scene.music.kind}:${scene.music.id}` : "");
 
   const save = async () => {
     setBusy(true);
     try {
-      await table.updateScene(scene.id, { name: name.trim(), grid, dmNotes: notes, width: w, height: h, expectedVersion: scene.version });
+      await table.updateScene(scene.id, { name: name.trim(), grid, dmNotes: notes, width: w, height: h, music: parseMusic(music), expectedVersion: scene.version });
       toast.success(t("save.saved"));
     } catch (e) {
       toast.error(errorMessage(e));
@@ -174,6 +178,23 @@ function SceneSettings({ scene, table, campaignId }: { scene: SceneDto; table: T
             <Input type="number" value={h} onChange={(e) => setH(num(e.target.value, h))} />
           </div>
         </Field>
+        <Field label={t("scene.music")} hint={t("scene.musicHint")}>
+          <Select value={music} onChange={(e) => setMusic(e.target.value)} data-testid="scene-music">
+            <option value="">{t("scene.musicNone")}</option>
+            {(lib.data?.playlists ?? []).map((p) => (
+              <option key={p.id} value={`playlist:${p.id}`}>
+                ▶ {p.name}
+              </option>
+            ))}
+            {(lib.data?.tracks ?? [])
+              .filter((tr) => tr.category === "music")
+              .map((tr) => (
+                <option key={tr.id} value={`track:${tr.id}`}>
+                  ♪ {tr.name}
+                </option>
+              ))}
+          </Select>
+        </Field>
         <Field label={t("table.dmNotes")}>
           <Textarea value={notes} maxLength={20000} onChange={(e) => setNotes(e.target.value)} className="min-h-16" />
         </Field>
@@ -216,4 +237,9 @@ function SceneSettings({ scene, table, campaignId }: { scene: SceneDto; table: T
       </div>
     </details>
   );
+}
+
+function parseMusic(v: string): SceneDto["music"] {
+  const [kind, id] = v.split(":");
+  return (kind === "playlist" || kind === "track") && id ? { kind, id } : null;
 }

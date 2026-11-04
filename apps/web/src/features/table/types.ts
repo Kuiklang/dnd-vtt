@@ -12,6 +12,8 @@ export interface SceneDto {
   grid: GridSettings;
   fogEnabled: boolean;
   dmNotes?: string;
+  /** DM only: music that starts when this scene is shown. */
+  music?: { kind: "playlist" | "track"; id: string } | null;
   sortOrder: number;
   version: number;
   isActive: boolean;
@@ -83,10 +85,26 @@ export interface FogOpDto {
   shape: FogShape;
 }
 
+export interface TemplateDto {
+  id: string;
+  sceneId: string;
+  ownerId: string | null;
+  shape: "circle" | "cone" | "line" | "square";
+  x: number;
+  y: number;
+  size: number;
+  width: number;
+  angle: number;
+  color: string;
+  label: string;
+  hidden: boolean;
+}
+
 export interface SceneState {
   scene: SceneDto;
   tokens: TokenDto[];
   fog: FogOpDto[];
+  templates: TemplateDto[];
 }
 
 export interface AssetDto {
@@ -98,5 +116,5 @@ export interface AssetDto {
   url: string;
 }
 
-export type Tool = "select" | "pan" | "measure" | "fog-reveal" | "fog-hide";
+export type Tool = "select" | "pan" | "measure" | "fog-reveal" | "fog-hide" | "template";
 export type FogShapeKind = FogShape["kind"];

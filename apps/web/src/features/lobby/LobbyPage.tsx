@@ -13,6 +13,7 @@ import { DiceTray } from "./DiceTray";
 import { InvitePanel } from "./InvitePanel";
 import { CampaignSettingsModal } from "./CampaignSettingsModal";
 import { CharacterSheetLoader } from "../character/CharacterSheetLoader";
+import { sheetTableFor } from "../character/SpellActions";
 import { DiceOverlay } from "../dice/DiceOverlay";
 import { DmToolkit, type ToolkitTab } from "../dmtools/DmToolkit";
 import { HandoutPopup } from "../dmtools/HandoutPopup";
@@ -178,6 +179,7 @@ function LobbyView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
             characterId={sheetId}
             onRoll={(req) => lobby.roll({ ...req, characterId: sheetId === detail.me.activeCharacterId ? sheetId : null })}
             rollTarget="campaign"
+            table={sheetTableFor(detail, false)}
           />
         )}
       </Modal>

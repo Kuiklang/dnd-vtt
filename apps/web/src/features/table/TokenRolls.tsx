@@ -7,6 +7,8 @@ import { toast } from "../../stores/toast";
 import { useT } from "../../i18n";
 import { CharacterSheetLoader } from "../character/CharacterSheetLoader";
 import type { RollRequest } from "../lobby/useLobby";
+import type { SheetTable } from "../character/SpellActions";
+import { useTemplateStore } from "../templates/store";
 
 interface Props {
   characterId: string;
@@ -19,6 +21,8 @@ interface Props {
   visibility?: RollRequest["visibility"];
   /** Label prefix (defaults to the sheet's name; tokens like "Goblin 2" pass their own). */
   label?: string;
+  /** Lets the opened sheet cast spells and give items at this table. */
+  table?: SheetTable;
 }
 
 const d20 = (bonus: number) => (bonus === 0 ? "1d20" : `1d20${bonus > 0 ? "+" : ""}${bonus}`);
@@ -28,13 +32,16 @@ const d20 = (bonus: number) => (bonus === 0 ? "1d20" : `1d20${bonus > 0 ? "+" : 
  * skills, initiative and attacks, using the same derived numbers as the sheet. Rolls are
  * made on the server and posted to the dice log like any other roll.
  */
-export function TokenRolls({ characterId, tick, myCharacterId, onRoll, visibility, label: who }: Props) {
+export function TokenRolls({ characterId, tick, myCharacterId, onRoll, visibility, label: who, table }: Props) {
   const t = useT();
   const [character, setCharacter] = useState<CharacterFull | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<RollMode>("normal");
   const [kind, setKind] = useState<"check" | "save">("check");
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Placing a spell's area on the map: get the sheet out of the way.
+  const templateRequest = useTemplateStore((s) => s.request);
+  useEffect(() => setSheetOpen(false), [templateRequest]);
 
   useEffect(() => {
     let cancelled = false;
@@ -168,6 +175,7 @@ export function TokenRolls({ characterId, tick, myCharacterId, onRoll, visibilit
           characterId={characterId}
           onRoll={(req) => onRoll({ ...req, characterId: characterId === myCharacterId ? characterId : null })}
           rollTarget="campaign"
+          table={table}
         />
       </Modal>
     </div>

@@ -30,6 +30,8 @@ import { dmToolRoutes } from "./dmtools/routes.js";
 import { DmToolsService } from "./dmtools/service.js";
 import { AudioService } from "./audio/service.js";
 import { audioRoutes } from "./audio/routes.js";
+import { CharacterActions } from "./characters/actions.js";
+import { characterActionRoutes } from "./characters/actionRoutes.js";
 
 export async function buildApp(
   config: Config,
@@ -58,6 +60,7 @@ export async function buildApp(
     combat: new CombatService(db, chat),
     dmTools: new DmToolsService(db, campaigns, assets, chat),
     audio: new AudioService(db),
+    actions: new CharacterActions(db, chat),
   };
   app.decorate("ctx", ctx);
   app.decorateRequest("auth", null);
@@ -118,6 +121,7 @@ export async function buildApp(
   await app.register(sceneRoutes);
   await app.register(dmToolRoutes);
   await app.register(audioRoutes);
+  await app.register(characterActionRoutes);
   await app.register(sheetImportRoutes, { extractor: opts.sheetExtractor !== undefined ? opts.sheetExtractor : extractorFromConfig(config) });
 
   if (config.WEB_DIST && existsSync(config.WEB_DIST)) {

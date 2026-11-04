@@ -4,13 +4,13 @@ import { z } from "zod";
 import { CHAT_CHANNELS, FOG_SHAPES, ROLL_VISIBILITIES, canSeeChatMessage, canSeeToken, type CampaignRole, type Capability, type FogShape } from "@vtt/rules";
 import { tokenConditionSchema, tokenFields } from "../scenes/routes.js";
 import type { CombatEffects } from "../combat/service.js";
-import { redactToken, toSceneDto, toTokenDto } from "../scenes/service.js";
+import { redactToken, toSceneDto, toTemplateDto, toTokenDto } from "../scenes/service.js";
 import { SESSION_COOKIE, type AppContext } from "../context.js";
 import { HttpError } from "../lib/errors.js";
 import { rollForViewer, viewerFor, type ChatMessageDto, type RollDto } from "../chat/service.js";
 import { cleanText } from "../lib/validation.js";
 import { canSeeJournal, toJournalDto } from "../dmtools/service.js";
-import type { JournalRow } from "../db/schema.js";
+import type { JournalRow, MapTemplateRow } from "../db/schema.js";
 import { viewAudio, type AudioSnapshot } from "../audio/service.js";
 
 export type PresenceStatus = "online" | "reconnecting" | "offline";
@@ -82,6 +82,30 @@ const actionsPatch = z
   .partial();
 const point = z.object({ x: z.number(), y: z.number() });
 const volume = z.number().min(0).max(1);
+const templateFields = z.object({
+  shape: z.enum(["circle", "cone", "line", "square"]),
+  x: z.number().min(-1e6).max(1e6),
+  y: z.number().min(-1e6).max(1e6),
+  size: z.number().min(1).max(1000),
+  width: z.number().min(1).max(100).default(5),
+  angle: z.number().min(-3600).max(3600).default(0),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default("#e0603a"),
+  label: cleanText(60).default(""),
+  hidden: z.boolean().default(false),
+});
+/** Same fields without defaults, so an update only touches what was sent. */
+const templatePatch = z
+  .object({
+    x: templateFields.shape.x,
+    y: templateFields.shape.y,
+    size: templateFields.shape.size,
+    width: z.number().min(1).max(100),
+    angle: z.number().min(-3600).max(3600),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    label: cleanText(60),
+    hidden: z.boolean(),
+  })
+  .partial();
 const audioControlSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("playTrack"), trackId: z.uuid() }),
   z.object({ kind: z.literal("playPlaylist"), playlistId: z.uuid(), trackId: z.uuid().optional(), shuffle: z.boolean().optional() }),
@@ -301,6 +325,34 @@ export class Realtime {
       const m = await campaigns.membership(campaignId, data.userId);
       const track = await this.ctx.audio.sfx(m, trackId);
       this.io.to(room(campaignId)).emit("audio:sfx", { campaignId, track, volume: v });
+    });
+
+    // ---- AoE templates ------------------------------------------------------
+
+    this.handle(s, "template:create", sceneRef.extend({ template: templateFields }), async (i) => {
+      const m = await campaigns.membership(i.campaignId, data.userId);
+      const row = await this.ctx.scenes.createTemplate(m, i.sceneId, i.template);
+      await this.broadcastTemplate(i.campaignId, i.sceneId, null, row);
+      return toTemplateDto(row);
+    });
+
+    this.handle(s, "template:update", sceneRef.extend({ templateId: z.uuid(), patch: templatePatch }), async (i) => {
+      const m = await campaigns.membership(i.campaignId, data.userId);
+      const { before, after } = await this.ctx.scenes.updateTemplate(m, i.sceneId, i.templateId, i.patch);
+      await this.broadcastTemplate(i.campaignId, i.sceneId, before, after);
+      return toTemplateDto(after);
+    });
+
+    this.handle(s, "template:delete", sceneRef.extend({ templateId: z.uuid() }), async (i) => {
+      const m = await campaigns.membership(i.campaignId, data.userId);
+      const row = await this.ctx.scenes.deleteTemplate(m, i.sceneId, i.templateId);
+      await this.broadcastTemplate(i.campaignId, i.sceneId, row, null);
+    });
+
+    this.handle(s, "template:clear", sceneRef, async (i) => {
+      const m = await campaigns.membership(i.campaignId, data.userId);
+      await this.ctx.scenes.clearTemplates(m, i.sceneId);
+      await this.sendSceneState(i.campaignId, i.sceneId);
     });
 
     // ---- Scenes / tokens / fog -------------------------------------------
@@ -569,6 +621,19 @@ export class Realtime {
    * Sends a token's current state to each viewer (re-read from the DB so every viewer gets
    * the unredacted source and its own redaction), or a removal to viewers who mustn't see it.
    */
+  /** Template change: hidden templates reach only GMs; un-hiding/hiding adds/removes for players. */
+  async broadcastTemplate(campaignId: string, sceneId: string, before: MapTemplateRow | null, after: MapTemplateRow | null) {
+    try {
+      for (const v of await this.sceneViewers(campaignId, sceneId)) {
+        const isGM = v.caps.has("token.manageAll");
+        if (after && (!after.hidden || isGM)) v.sock.emit("template:upsert", toTemplateDto(after));
+        else if (before && (!before.hidden || isGM)) v.sock.emit("template:remove", { sceneId, templateId: before.id });
+      }
+    } catch (err) {
+      this.app.log.error({ err }, "broadcastTemplate failed");
+    }
+  }
+
   async broadcastToken(campaignId: string, sceneId: string, tokenId: string) {
     try {
       const scene = await this.ctx.scenes.viewableRaw(campaignId, sceneId);
@@ -589,10 +654,11 @@ export class Realtime {
     try {
       const scene = await this.ctx.scenes.viewableRaw(campaignId, sceneId);
       if (!scene) return;
-      const [{ state, ops }, rows, activeSceneId] = await Promise.all([
+      const [{ state, ops }, rows, activeSceneId, templates] = await Promise.all([
         this.ctx.scenes.fogState(scene),
         this.ctx.scenes.tokenRows(sceneId),
         this.ctx.scenes.activeSceneId(campaignId),
+        this.ctx.scenes.templateRows(sceneId),
       ]);
       const all = rows.map((r) => toTokenDto(r.token, r.character));
       for (const v of await this.sceneViewers(campaignId, sceneId)) {
@@ -606,6 +672,7 @@ export class Realtime {
           scene: toSceneDto(scene, activeSceneId, v.caps.has("dmNotes.view")),
           tokens: all.filter((t) => canSeeToken(t, viewer, state)).map((t) => redactToken(t, viewer)),
           fog: ops,
+          templates: templates.filter((t) => !t.hidden || isGM).map(toTemplateDto),
         });
       }
     } catch (err) {

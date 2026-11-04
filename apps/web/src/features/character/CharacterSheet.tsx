@@ -16,6 +16,7 @@ import { combineModes, mod, newId } from "./format";
 import { NumberField, RollButton, Section, SourceTag, TextField } from "./fields";
 import { AttacksSection, CombatSection, ConditionsSection } from "./CombatSections";
 import { FeaturesSection, InventorySection, NotesSection, OverridesSection, SpellsSection } from "./ListSections";
+import type { SheetActions } from "./SpellActions";
 
 export interface SheetRoll {
   formula: string;
@@ -30,15 +31,23 @@ export interface SheetProps {
   onChange: (patch: { name?: string; data?: CharacterData }) => void;
   onRoll?: (r: SheetRoll) => Promise<unknown>;
   rollTarget: "campaign" | "local";
+  /** Set when the sheet is open at a table and may cast spells / give items there. */
+  actions?: SheetActions;
 }
 
 export type SetData = (fn: (d: CharacterData) => CharacterData) => void;
 
 const TABS = ["Main", "Combat", "Spells", "Inventory", "Features", "Notes"] as const;
+/** The sheet remounts when the server changes the character; remember the tab across that. */
+const lastTab = new Map<string, (typeof TABS)[number]>();
 
-export function CharacterSheet({ character, editable, onChange, onRoll, rollTarget }: SheetProps) {
+export function CharacterSheet({ character, editable, onChange, onRoll, rollTarget, actions }: SheetProps) {
   const ruleset = getBuiltinRuleset(character.rulesetId);
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Main");
+  const [tab, setTabState] = useState<(typeof TABS)[number]>(() => lastTab.get(character.id) ?? "Main");
+  const setTab = (t: (typeof TABS)[number]) => {
+    lastTab.set(character.id, t);
+    setTabState(t);
+  };
   const [mode, setMode] = useState<RollMode>("normal");
   const data = character.data;
   const derived = useMemo(() => (ruleset ? deriveCharacter(data, ruleset) : null), [data, ruleset]);
@@ -111,8 +120,8 @@ export function CharacterSheet({ character, editable, onChange, onRoll, rollTarg
           </div>
         </div>
       )}
-      {tab === "Spells" && <SpellsSection data={data} derived={derived} editable={editable} setData={setData} roll={roll} d20={d20} />}
-      {tab === "Inventory" && <InventorySection data={data} editable={editable} setData={setData} />}
+      {tab === "Spells" && <SpellsSection data={data} derived={derived} editable={editable} setData={setData} roll={roll} d20={d20} actions={actions} />}
+      {tab === "Inventory" && <InventorySection data={data} editable={editable} setData={setData} actions={actions} />}
       {tab === "Features" && <FeaturesSection data={data} editable={editable} setData={setData} />}
       {tab === "Notes" && (
         <div className="space-y-3">

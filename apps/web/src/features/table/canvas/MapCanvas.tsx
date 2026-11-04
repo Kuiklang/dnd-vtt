@@ -7,11 +7,15 @@ import {
   canControlToken,
   pathDistance,
   snapToGrid,
+  templateOutline,
+  tokensInTemplate,
+  type MapTemplate,
   type DiagonalRule,
   type FogShape,
   type Point,
 } from "@vtt/rules";
-import type { FogOpDto, FogShapeKind, SceneDto, TokenDto, Tool } from "../types";
+import type { FogOpDto, FogShapeKind, SceneDto, TemplateDto, TokenDto, Tool } from "../types";
+import type { TemplatePreset } from "../../templates/store";
 import { drawFog, drawGrid, traceShape } from "./draw";
 import { TokenNode } from "./TokenNode";
 
@@ -39,6 +43,11 @@ interface Props {
   onSelect(id: string | null): void;
   onMoveToken(id: string, x: number, y: number): void;
   onFogShape(mode: "reveal" | "hide", shape: FogShape): void;
+  templates: TemplateDto[];
+  templatePreset: TemplatePreset;
+  selectedTemplateId: string | null;
+  onSelectTemplate(id: string | null): void;
+  onPlaceTemplate(t: MapTemplate): void;
 }
 
 interface View {
@@ -53,6 +62,7 @@ const layerOrder = (l: TokenDto["layer"]) => TOKEN_LAYERS.indexOf(l);
 
 export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(props, ref) {
   const { scene, tokens, fog, myId, isGM, tool, fogShape, spaceHeld, diagonal, selectedId, activeTokenId, defeatedIds, onSelect, onMoveToken, onFogShape } = props;
+  const { templates, templatePreset, selectedTemplateId, onSelectTemplate, onPlaceTemplate } = props;
   const wrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
@@ -62,6 +72,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(p
   const [measure, setMeasure] = useState<Point[]>([]);
   const [draft, setDraft] = useState<{ start: Point; current: Point } | null>(null);
   const [poly, setPoly] = useState<Point[]>([]);
+  const [aim, setAim] = useState<{ origin: Point; current: Point } | null>(null);
   const fitted = useRef<string | null>(null);
 
   useEffect(() => {
@@ -97,6 +108,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(p
     setMeasure([]);
     setDraft(null);
     setPoly([]);
+    setAim(null);
   }, [tool, fogShape, scene.id]);
 
   useEffect(() => {
@@ -105,6 +117,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(p
         setMeasure([]);
         setDraft(null);
         setPoly([]);
+        setAim(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -135,18 +148,42 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(p
     if (spaceHeld) return;
     const p = scenePoint();
     if (!p) return;
-    if (tool === "select" && e.target === e.target.getStage()) onSelect(null);
+    if (tool === "select" && e.target === e.target.getStage()) {
+      onSelect(null);
+      onSelectTemplate(null);
+    }
     if (isFogTool && fogShape !== "polygon") setDraft({ start: p, current: p });
+    if (tool === "template") {
+      const o = snap(p);
+      setAim({ origin: o, current: o });
+    }
   };
+
+  /** The template being aimed: origin where the pointer went down, direction toward the pointer. */
+  const aimTemplate = (a: { origin: Point; current: Point }): MapTemplate => ({
+    shape: templatePreset.shape,
+    x: a.origin.x,
+    y: a.origin.y,
+    size: templatePreset.size,
+    width: templatePreset.width,
+    angle: Math.round((Math.atan2(a.current.y - a.origin.y, a.current.x - a.origin.x) * 180) / Math.PI),
+  });
 
   const onMouseMove = () => {
     const p = scenePoint();
     if (!p) return;
     setCursor(p);
     if (draft) setDraft({ ...draft, current: p });
+    if (aim) setAim({ ...aim, current: p });
   };
 
   const onMouseUp = () => {
+    if (aim) {
+      const t = aimTemplate(aim);
+      setAim(null);
+      onPlaceTemplate(t);
+      return;
+    }
     if (!draft) return;
     const { start, current } = draft;
     setDraft(null);
@@ -175,6 +212,15 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(p
       if (pts.length >= 3) onFogShape(fogMode, { kind: "polygon", points: pts });
     }
   };
+
+  const aimed = aim ? aimTemplate(aim) : null;
+  // Tokens caught by any template (or the one being aimed) get a ring.
+  const hits = useMemo(() => {
+    const ids = new Set<string>();
+    const g = scene.grid;
+    for (const t of [...templates, ...(aimed ? [aimed] : [])]) for (const id of tokensInTemplate(t, tokens, g)) ids.add(id);
+    return ids;
+  }, [templates, aimed, tokens, scene.grid]);
 
   const sorted = useMemo(() => [...tokens].sort((a, b) => layerOrder(a.layer) - layerOrder(b.layer)), [tokens]);
   const viewer = useMemo(() => ({ userId: myId, isGameMaster: isGM }), [myId, isGM]);
@@ -253,8 +299,15 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(p
           <Shape sceneFunc={(ctx) => drawGrid(ctx._context, scene.grid, scene.width, scene.height, bounds, view.scale)} />
         </Layer>
 
+        <Layer name="templates" listening={tool === "select"}>
+          {templates.map((t) => (
+            <TemplateShape key={t.id} t={t} grid={scene.grid} k={k} selected={t.id === selectedTemplateId} isGM={isGM} onSelect={() => onSelectTemplate(t.id)} />
+          ))}
+          {aimed && <TemplateShape t={{ ...aimed, id: "aim", color: templatePreset.color, label: templatePreset.label, hidden: false }} grid={scene.grid} k={k} selected={false} isGM={isGM} />}
+        </Layer>
+
         {!isGM && fogLayerEl}
-        <Layer name="tokens" listening={!isFogTool && tool !== "measure"}>
+        <Layer name="tokens" listening={!isFogTool && tool !== "measure" && tool !== "template"}>
           {sorted.map((t) => (
             <TokenNode
               key={t.id}
@@ -274,6 +327,11 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(p
         {isGM && fogLayerEl}
 
         <Layer listening={false}>
+          {tokens
+            .filter((t) => hits.has(t.id))
+            .map((t) => (
+              <Circle key={`hit-${t.id}`} name="aoe-hit" x={t.x} y={t.y} radius={(t.size * scene.grid.size) / 2 + 4 * k} stroke="#ff8a5c" strokeWidth={3 * k} dash={[6 * k, 4 * k]} />
+            ))}
           {draftShape && (
             <Shape
               sceneFunc={(ctx) => {
@@ -316,3 +374,19 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(p
     </div>
   );
 });
+
+function TemplateShape({ t, grid, k, selected, isGM, onSelect }: { t: MapTemplate & { id: string; color: string; label: string; hidden: boolean }; grid: SceneDto["grid"]; k: number; selected: boolean; isGM: boolean; onSelect?: () => void }) {
+  const pts = templateOutline(t, grid);
+  // Label just above the shape's top edge, centred, so tokens inside don't cover it.
+  const xs = pts.map((p) => p.x);
+  const top = Math.min(...pts.map((p) => p.y));
+  const labelAt = { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: top - 18 * k };
+  return (
+    <Group name="template" id={t.id} onClick={onSelect} onTap={onSelect} opacity={t.hidden && isGM ? 0.6 : 1}>
+      <Line points={pts.flatMap((p) => [p.x, p.y])} closed fill={`${t.color}40`} stroke={selected ? "#ebcd7a" : t.color} strokeWidth={(selected ? 3 : 2) * k} dash={t.hidden ? [8 * k, 6 * k] : undefined} />
+      {t.label && (
+        <Text x={labelAt.x - 100 * k} y={labelAt.y} width={200} align="center" text={t.label} fontSize={13} fontStyle="bold" scaleX={k} scaleY={k} fill="#f5ead2" shadowColor="#000" shadowBlur={4} listening={false} />
+      )}
+    </Group>
+  );
+}

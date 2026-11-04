@@ -11,6 +11,7 @@ import type { SceneService } from "./scenes/service.js";
 import type { CombatService } from "./combat/service.js";
 import type { DmToolsService } from "./dmtools/service.js";
 import type { AudioService } from "./audio/service.js";
+import type { CharacterActions } from "./characters/actions.js";
 
 export interface AppContext {
   config: Config;
@@ -24,6 +25,7 @@ export interface AppContext {
   combat: CombatService;
   dmTools: DmToolsService;
   audio: AudioService;
+  actions: CharacterActions;
   /** Set once Socket.IO is attached; services use it to broadcast REST-originated changes. */
   realtime?: Realtime;
 }

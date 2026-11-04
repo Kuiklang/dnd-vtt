@@ -11,6 +11,7 @@ import type { Table } from "./useTable";
 import type { Combat } from "./useCombat";
 import { VitalsPanel } from "./VitalsPanel";
 import { TokenRolls } from "./TokenRolls";
+import { sheetTableFor } from "../character/SpellActions";
 import type { RollRequest } from "../lobby/useLobby";
 import { StatBlock } from "../dmtools/StatBlock";
 
@@ -103,7 +104,7 @@ export function TokenPanel({ table, detail, isGM, selected, combat, ruleset, cha
         />
       )}
       {selected?.characterId && (isGM || selected.ownerIds.includes(detail.me.userId)) && (
-        <TokenRolls characterId={selected.characterId} tick={characterTick} myCharacterId={myCharacterId} onRoll={onRoll} />
+        <TokenRolls characterId={selected.characterId} tick={characterTick} myCharacterId={myCharacterId} onRoll={onRoll} table={sheetTableFor(detail, true)} />
       )}
       {selected && isGM && selected.statBlock && <TokenStatBlock key={`sb-${selected.id}`} token={selected} tick={characterTick} onRoll={onRoll} />}
       {selected && isGM && <TokenEditor key={selected.id} token={selected} table={table} detail={detail} campaignId={campaignId} onSelect={onSelect} />}

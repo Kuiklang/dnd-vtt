@@ -116,10 +116,28 @@
 - [x] ผู้เล่นได้เฉพาะเพลงปัจจุบัน ไม่ได้คิว/playlist
 - [x] Tests: unit (audio model, volume), integration (upload, Range, สิทธิ์, playlist, realtime, auto-advance), E2E `e2e/phase6.e2e.cjs`
 - [ ] Crossfade ระหว่างเพลง
-- [ ] เพลงประจำ scene / เพลงเริ่มต้นของแคมเปญ (ทำพร้อม scene switching ใน Phase 7)
+- [x] เพลงประจำ scene (Phase 7)
+- [ ] เพลงเริ่มต้นของแคมเปญ
 - [ ] วัดความยาวเพลงที่ server (ตอนนี้ใช้ค่าจากเบราว์เซอร์ที่อัปโหลด)
 - [ ] ให้ผู้เล่นขอเพลง / soundboard สำหรับผู้เล่น (ผ่าน permission override)
 
-## Phase 7–9
+## Phase 7 — Advanced 🟡 (รอบแรกเสร็จ)
+
+- [x] คลังเวท SRD 5.1 (51 บท) + ค้นหา + เพิ่มลงชีต (`srdId` ลิงก์กับข้อมูลเวท)
+- [x] ร่ายเวทจากชีต: เลือก slot/upcast/ritual, server ใช้ slot ใต้ row lock, ทอย attack/damage/healing, โพสต์ DC/พื้นที่ลง log
+- [x] AoE template: วงกลม/กรวย/เส้น/สี่เหลี่ยม, เล็งทิศ, ไฮไลต์โทเคนที่โดน, realtime, ซ่อนสำหรับ DM, หมุน/ลบ/ล้าง, วางต่อจากการร่ายเวท
+- [x] เพลงประจำฉาก (playlist/เพลง) เริ่มเมื่อแสดงฉาก
+- [x] ส่งไอเทมระหว่างตัวละคร (แบ่ง/รวม stack, ล็อกทั้งสองชีต)
+- [x] Tests: unit (spells, templates), integration `test/phase7.test.ts`, E2E `e2e/phase7.e2e.cjs`
+- [ ] ลากย้าย template
+- [ ] Concentration tracking อัตโนมัติ + หัก HP จากเวทบน token ที่โดน
+- [ ] เวท SRD ครบทุกบท + เวท homebrew ในคลังของแคมเปญ
+- [ ] Undo/redo (map, token, fog)
+- [ ] Session recap + timeline
+- [ ] Scene templates (export/import JSON)
+- [ ] Drawing tools + custom layers
+- [ ] Crossfade ระหว่างเพลง
+
+## Phase 8–9
 
 ดู [docs/ROADMAP.md](docs/ROADMAP.md)

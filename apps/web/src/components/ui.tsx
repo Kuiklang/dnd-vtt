@@ -159,15 +159,23 @@ export function Toaster() {
   );
 }
 
+const modalStack: object[] = [];
+
 export function Modal({ open, onClose, title, children, wide }: { open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean }) {
   // Escape closes the dialog wherever focus is (not only inside it).
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeRef.current();
+    // Only the top-most dialog closes, so Escape in a nested picker keeps the sheet open.
+    const token = {};
+    modalStack.push(token);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && modalStack[modalStack.length - 1] === token && closeRef.current();
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      modalStack.splice(modalStack.indexOf(token), 1);
+    };
   }, [open]);
   if (!open) return null;
   return (
