@@ -16,6 +16,9 @@ import { CharacterSheetLoader } from "../character/CharacterSheetLoader";
 import { DiceOverlay } from "../dice/DiceOverlay";
 import { DmToolkit, type ToolkitTab } from "../dmtools/DmToolkit";
 import { HandoutPopup } from "../dmtools/HandoutPopup";
+import { AudioDock } from "../audio/AudioDock";
+import { MusicPanel } from "../audio/MusicPanel";
+import { useCampaignAudio } from "../audio/useCampaignAudio";
 import { useJournal } from "../dmtools/useJournal";
 import { useT } from "../../i18n";
 
@@ -47,6 +50,8 @@ function LobbyView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
   const ruleset = getBuiltinRuleset(detail.campaign.rulesetId);
   const journal = useJournal(detail.campaign.id);
   const [toolkit, setToolkit] = useState<{ open: boolean; tab: ToolkitTab }>({ open: false, tab: "journal" });
+  const audio = useCampaignAudio(detail.campaign.id);
+  const [musicOpen, setMusicOpen] = useState(false);
   const t = useT();
 
   return (
@@ -54,6 +59,7 @@ function LobbyView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
       <LobbyHeader lobby={lobby} detail={detail} caps={caps} onSettings={() => setSettingsOpen(true)} />
       <DiceOverlay roll={lobby.lastRoll} />
       <HandoutPopup campaignId={detail.campaign.id} />
+      {caps.has("music.control") && <MusicPanel open={musicOpen} onClose={() => setMusicOpen(false)} campaignId={detail.campaign.id} audio={audio} />}
       <DmToolkit
         open={toolkit.open}
         onClose={() => setToolkit((s) => ({ ...s, open: false }))}
@@ -73,6 +79,14 @@ function LobbyView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
             🧰 {t("toolkit.title")}
           </Button>
         )}
+        {caps.has("music.control") && (
+          <Button size="sm" variant="ghost" onClick={() => setMusicOpen(true)} data-testid="lobby-music">
+            🎵 {t("audio.open")}
+          </Button>
+        )}
+        <div className="ml-auto">
+          <AudioDock audio={audio} />
+        </div>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)_340px]">
         <div className="scroll-thin min-h-0 space-y-4 overflow-y-auto">

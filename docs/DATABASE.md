@@ -64,7 +64,7 @@ Enums ใหม่: `asset_kind`, `token_layer`, `token_shape`, `fog_mode`
 | `spells`, `items`, `homebrew_content` | 5–7 | SRD seed + user content; `source` และ licence field |
 | `rulesets` (custom) | 5 | base_ruleset_id + overrides JSONB (ใช้ `buildHomebrewRuleset`) |
 | `journals`, `handouts`, `random_tables` | 5 | visibility per entry + links (note ↔ map/character/item) |
-| `audio_tracks`, `playlists` | 6 | asset_id, category (music/ambient/sfx), tags |
+| `audio_tracks`, `playlists`, `campaign_audio` | 6 ✅ | track: asset_id, category (music/ambient/sfx), tags, duration_sec; playlist: track_ids uuid[] + version; campaign_audio: สถานะการเล่นปัจจุบัน (jsonb, 1 แถวต่อแคมเปญ) |
 | `session_recaps`, `timeline_events` | 7 | เชื่อม game_sessions; recap มีสถานะ draft/approved |
 
 `permission` overrides ปัจจุบันเก็บใน `campaigns.settings.permissions` (ผ่าน `sanitizePermissionOverrides`)
