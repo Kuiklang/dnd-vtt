@@ -13,7 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { ActionEconomy, CharacterData, Defenses, FogShape, GridSettings, HpState, RollResult, TokenCondition } from "@vtt/rules";
+import type { ActionEconomy, AudioState, CharacterData, Defenses, FogShape, GridSettings, HpState, RollResult, TokenCondition } from "@vtt/rules";
 
 
 /*
@@ -35,7 +35,7 @@ export const campaignPrivacy = pgEnum("campaign_privacy", ["public", "invite_onl
 export const characterKind = pgEnum("character_kind", ["pc", "npc", "monster"]);
 export const chatChannel = pgEnum("chat_channel", ["global", "party", "dm", "whisper", "system"]);
 export const rollVisibility = pgEnum("roll_visibility", ["public", "private", "dm_only", "whisper", "blind"]);
-export const assetKind = pgEnum("asset_kind", ["map", "token", "portrait", "avatar", "cover", "handout", "other"]);
+export const assetKind = pgEnum("asset_kind", ["map", "token", "portrait", "avatar", "cover", "handout", "audio", "other"]);
 export const tokenLayer = pgEnum("token_layer", ["map", "objects", "tokens", "dm"]);
 export const tokenShape = pgEnum("token_shape", ["circle", "square"]);
 export const fogMode = pgEnum("fog_mode", ["reveal", "hide"]);
@@ -521,3 +521,58 @@ export const randomTables = pgTable(
 export type JournalRow = typeof journalEntries.$inferSelect;
 export type EncounterRow = typeof encounters.$inferSelect;
 export type RandomTableRow = typeof randomTables.$inferSelect;
+
+/*
+ * Phase 6: music & ambience.
+ */
+
+export const audioCategory = pgEnum("audio_category", ["music", "ambient", "sfx"]);
+
+/** A campaign sound: an uploaded audio asset plus DM-facing metadata. */
+export const audioTracks = pgTable(
+  "audio_tracks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    assetId: uuid("asset_id")
+      .notNull()
+      .references(() => assets.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    category: audioCategory("category").notNull().default("music"),
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    /** Seconds, measured by the uploader's browser; null when unknown (no auto-advance). */
+    durationSec: real("duration_sec"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    ...timestamps,
+  },
+  (t) => [index("audio_tracks_campaign_idx").on(t.campaignId)],
+);
+
+export const playlists = pgTable(
+  "playlists",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    trackIds: uuid("track_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    version: integer("version").notNull().default(1),
+    ...timestamps,
+  },
+  (t) => [index("playlists_campaign_idx").on(t.campaignId)],
+);
+
+/** What is playing in a campaign right now (one row per campaign, survives restarts). */
+export const campaignAudio = pgTable("campaign_audio", {
+  campaignId: uuid("campaign_id")
+    .primaryKey()
+    .references(() => campaigns.id, { onDelete: "cascade" }),
+  state: jsonb("state").$type<AudioState>().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type AudioTrackRow = typeof audioTracks.$inferSelect;
+export type PlaylistRow = typeof playlists.$inferSelect;

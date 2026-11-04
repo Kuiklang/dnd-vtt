@@ -28,6 +28,8 @@ import { sheetImportRoutes } from "./import/routes.js";
 import { sceneRoutes } from "./scenes/routes.js";
 import { dmToolRoutes } from "./dmtools/routes.js";
 import { DmToolsService } from "./dmtools/service.js";
+import { AudioService } from "./audio/service.js";
+import { audioRoutes } from "./audio/routes.js";
 
 export async function buildApp(
   config: Config,
@@ -55,6 +57,7 @@ export async function buildApp(
     scenes: new SceneService(db, campaigns, assets),
     combat: new CombatService(db, chat),
     dmTools: new DmToolsService(db, campaigns, assets, chat),
+    audio: new AudioService(db),
   };
   app.decorate("ctx", ctx);
   app.decorateRequest("auth", null);
@@ -72,7 +75,7 @@ export async function buildApp(
     reply.header("referrer-policy", "strict-origin-when-cross-origin");
     reply.header(
       "content-security-policy",
-      "default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' ws: wss:; frame-ancestors 'none'",
+      "default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' ws: wss:; media-src 'self' blob:; frame-ancestors 'none'",
     );
   });
 
@@ -114,6 +117,7 @@ export async function buildApp(
   await app.register(assetRoutes);
   await app.register(sceneRoutes);
   await app.register(dmToolRoutes);
+  await app.register(audioRoutes);
   await app.register(sheetImportRoutes, { extractor: opts.sheetExtractor !== undefined ? opts.sheetExtractor : extractorFromConfig(config) });
 
   if (config.WEB_DIST && existsSync(config.WEB_DIST)) {
@@ -133,6 +137,7 @@ export async function buildApp(
   if (opts.realtime !== false) {
     ctx.realtime = new Realtime(app, ctx);
     app.addHook("preClose", async () => {
+      ctx.realtime?.stopTimers();
       ctx.realtime?.io.disconnectSockets(true);
     });
   }

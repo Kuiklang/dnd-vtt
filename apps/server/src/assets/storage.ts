@@ -9,7 +9,8 @@ import type { Readable } from "node:stream";
  */
 export interface Storage {
   put(key: string, data: Buffer, contentType: string): Promise<void>;
-  get(key: string): Promise<{ stream: Readable; size: number } | null>;
+  /** `range` is inclusive byte offsets; `size` is always the whole object's size. */
+  get(key: string, range?: { start: number; end: number }): Promise<{ stream: Readable; size: number } | null>;
   delete(key: string): Promise<void>;
 }
 
@@ -35,11 +36,11 @@ export class LocalDiskStorage implements Storage {
     await rename(tmp, target);
   }
 
-  async get(key: string) {
+  async get(key: string, range?: { start: number; end: number }) {
     const target = this.file(key);
     try {
       const s = await stat(target);
-      return { stream: createReadStream(target), size: s.size };
+      return { stream: createReadStream(target, range), size: s.size };
     } catch {
       return null;
     }
