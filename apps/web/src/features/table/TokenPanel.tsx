@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { TOKEN_LAYERS, TOKEN_SHAPES, type TokenLayer, type TokenShape } from "@vtt/rules";
+import { TOKEN_LAYERS, TOKEN_SHAPES, type RulesetDefinition, type TokenLayer, type TokenShape } from "@vtt/rules";
 import { Button, Field, Input, Select } from "../../components/ui";
 import { errorMessage } from "../../lib/api";
 import { IMAGE_ACCEPT, uploadImage } from "../../lib/upload";
@@ -8,18 +8,22 @@ import { useT } from "../../i18n";
 import type { CampaignDetail } from "../../lib/types";
 import type { TokenDto } from "./types";
 import type { Table } from "./useTable";
+import type { Combat } from "./useCombat";
+import { VitalsPanel } from "./VitalsPanel";
 
 interface Props {
   table: Table;
   detail: CampaignDetail;
   isGM: boolean;
   selected: TokenDto | null;
+  combat: Combat;
+  ruleset: RulesetDefinition | undefined;
   dropPoint(): { x: number; y: number };
   onSelect(id: string | null): void;
 }
 
 /** Add tokens (GM: blank or party character; player: own character) and edit the selection. */
-export function TokenPanel({ table, detail, isGM, selected, dropPoint, onSelect }: Props) {
+export function TokenPanel({ table, detail, isGM, selected, combat, ruleset, dropPoint, onSelect }: Props) {
   const t = useT();
   const campaignId = detail.campaign.id;
   const myCharacterId = detail.me.activeCharacterId;
@@ -82,12 +86,18 @@ export function TokenPanel({ table, detail, isGM, selected, dropPoint, onSelect 
           <p className="text-xs text-parchment-500">{t("tokens.readonly")}</p>
         </div>
       )}
-      {selected && isGM && <TokenEditor key={selected.id} token={selected} table={table} detail={detail} campaignId={campaignId} onSelect={onSelect} />}
-      {selected && !isGM && (
-        <div className="rounded-md border border-ink-700 p-2">
-          <p className="font-semibold text-parchment-50">{selected.name}</p>
-        </div>
+      {selected && !isGM && <p className="font-semibold text-parchment-50">{selected.name}</p>}
+      {selected && (
+        <VitalsPanel
+          token={selected}
+          table={table}
+          combat={combat}
+          ruleset={ruleset}
+          isGM={isGM}
+          canControl={selected.ownerIds.includes(detail.me.userId)}
+        />
       )}
+      {selected && isGM && <TokenEditor key={selected.id} token={selected} table={table} detail={detail} campaignId={campaignId} onSelect={onSelect} />}
     </div>
   );
 }

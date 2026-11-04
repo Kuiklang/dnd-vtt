@@ -60,6 +60,8 @@ export interface TokenVitals {
   defenses: Defenses;
   /** Where the numbers live: the linked character sheet or the token itself. */
   source: "character" | "token";
+  /** Token-tracked creatures only (characters derive it from DEX). */
+  initiativeBonus?: number;
 }
 
 export interface TokenDto extends TokenState {
@@ -85,7 +87,7 @@ export function vitalsOf(t: TokenRow, character: LinkedCharacter | null): TokenV
     };
   }
   if (!t.stats) return null;
-  return { hp: t.stats.hp, ac: t.stats.ac, conditions: t.stats.conditions, defenses: t.stats.defenses ?? NO_DEFENSES, source: "token" };
+  return { hp: t.stats.hp, ac: t.stats.ac, conditions: t.stats.conditions, defenses: t.stats.defenses ?? NO_DEFENSES, source: "token", initiativeBonus: t.stats.initiativeBonus };
 }
 
 /** Copy of a token as one viewer may see it (vitals withheld per hpVisibility). */

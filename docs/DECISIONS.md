@@ -40,3 +40,10 @@
 25. **i18n เขียนเอง (ไม่มี dependency)** — `en.ts` เป็นต้นแบบ key (type-safe), `th.ts` ต้องครบทุก key (มี unit test), ภาษาเก็บใน localStorage,
     ค่าเริ่มต้นตามภาษาของ browser; ศัพท์เกม (AC, HP, DM, Token) คงเป็นอังกฤษ
 26. **ยังใช้ Drizzle** (ไม่เปลี่ยนเป็น Prisma ตามแผนเดิม) — รอผู้ใช้ยืนยัน; เหตุผลดูข้อ 2
+27. **HP ของ PC อยู่บน character sheet ที่เดียว** — token ที่ผูกกับ character อ่าน HP/AC/conditions/defenses จาก sheet และการ damage/heal
+    เขียนลง sheet (SELECT … FOR UPDATE + version) ไม่มีสำเนาให้หลุด sync; token ที่ไม่มี sheet (มอนสเตอร์/NPC) เก็บใน `tokens.stats`
+28. **Combat หนึ่งรายการต่อแคมเปญ** (partial unique index บน `combats(campaign_id) WHERE status='active'`) — state turn/round อยู่ที่ server,
+    `combat:next` ส่ง `expectedVersion` กันกดซ้ำ; ทุก client ได้ `combat:state` ที่กรองแล้วต่อผู้รับ (combatant ที่ซ่อนและ vitals ที่ไม่มีสิทธิ์เห็นถูกตัดออก)
+29. **การมองเห็น HP ต่อ token** (`hp_visibility`: everyone / owners / gm) — ค่าเริ่มต้น PC = everyone, อื่นๆ = gm; ใช้ `canSeeTokenVitals` ตัวเดียวกันทั้ง token และ initiative list
+30. **Conditions ลดลงตอนจบตาของสิ่งมีชีวิตนั้น** — ง่ายและคาดเดาได้ (ครอบคลุม "until the end of its next turn" ส่วนใหญ่); เงื่อนไขแบบอื่น DM ลบเองได้
+31. **มอนสเตอร์ที่ HP = 0 → defeated อัตโนมัติ, PC ไม่** — PC ต้องทอย death save ตามกฎ 5e; DM ยกเลิก defeated ได้

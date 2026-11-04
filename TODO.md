@@ -52,25 +52,30 @@
 - [ ] Character sheet (labels ยกเว้นศัพท์เกม)
 - [ ] ข้อความ error จาก server (ส่ง `code` แล้ว client แปล)
 
-## Phase 4 — Combat (ถัดไป, ปิด MVP)
-
-- [ ] ตาราง `combats`, `combatants` + migration
-- [ ] Start/end combat, เพิ่ม combatant จาก token บนแผนที่
-- [ ] Roll initiative (ใช้ initiative bonus จาก character), แก้ค่า, เรียงลำดับ, ลากสลับ
-- [ ] Turn / round, next / previous / skip, highlight token ที่ถึงตา (sync ทุก client)
-- [ ] HP บน token: damage / healing / temp HP, resistance / vulnerability / immunity (rules engine)
-- [ ] Token ↔ character HP sync (PC), HP ของ NPC/monster token ที่ไม่มี sheet
-- [ ] Conditions บน token + duration ตาม round
-- [ ] Combat HUD + action economy tracker
-- [ ] DM override ทุกผลลัพธ์, visibility ของ HP มอนสเตอร์
-- [ ] Tests: unit (damage maths), integration (turn sync, permissions), E2E combat flow
-
-## Phase 3 — Character & Dice
+## Phase 3 — Character & Dice (ถัดไป)
 
 - [ ] Character creator wizard
 - [ ] Dice animation 2D + sound (ปิดได้) — settings มีแล้วใน profile
 - [ ] Character import จาก PDF/รูป (OCR/AI provider interface, confidence, review ทุก field)
 - [ ] Ability checks / attacks จาก token HUD
+
+## Phase 4 — Combat ✅
+
+- [x] ตาราง `combats`, `combatants`, token `stats` + `hp_visibility` + migration 0002
+- [x] Start/end combat, เพิ่ม combatant จาก token บนแผนที่ / token ที่เลือก / แบบไม่มี token, นำออก
+- [x] Roll initiative ที่ server (bonus จาก character หรือ token), ผู้เล่นทอยของตัวเองครั้งเดียว, DM แก้ค่า, เรียงลำดับ
+- [x] Turn / round, next / previous, ข้าม defeated, highlight token ที่ถึงตา (sync ทุก client), กันกดซ้ำด้วย version
+- [x] HP บน token: damage / healing / temp HP / set, resistance / vulnerability / immunity (rules engine)
+- [x] Token ↔ character HP sync (PC), HP/AC/defenses ของ NPC/monster token ที่ไม่มี sheet
+- [x] Conditions บน token + duration ตาม round (หมดอายุตอนจบตา), ตรวจกับ ruleset
+- [x] Combat HUD + action economy tracker
+- [x] DM override (Set HP, defeated, hidden), visibility ของ HP ต่อ token
+- [x] Tests: unit (damage maths, turns), integration (turn sync, permissions, redaction), E2E combat flow
+- [ ] ลากสลับลำดับ initiative (ตอนนี้แก้ตัวเลข)
+- [ ] Death saves ใน combat HUD
+- [ ] คำนวณ movement used จากการลาก token
+- [ ] Back คืน condition ที่หมดอายุ (เก็บ history ต่อ turn)
+- [ ] Concentration check อัตโนมัติเมื่อรับดาเมจ
 
 ## Phase 5–9
 

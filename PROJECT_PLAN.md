@@ -4,7 +4,7 @@
 > เอกสารนี้คือบันทึกความคืบหน้าหลักของโปรเจกต์ อัปเดตทุกครั้งที่จบงานแต่ละช่วง
 > รายการงานย่อยและสถานะจริงอยู่ใน [TODO.md](TODO.md) · รายละเอียดเชิงเทคนิคอยู่ใน [docs/](docs/)
 
-ปรับปรุงล่าสุด: **2026-11-04** · สถานะ: **Phase 1 ✅ · Phase 2 ✅ · ถัดไป Phase 4 (Combat) เพื่อปิด MVP**
+ปรับปรุงล่าสุด: **2026-11-04** · สถานะ: **Phase 1 ✅ · Phase 2 ✅ · Phase 4 ✅ → MVP ครบ · ถัดไป Phase 3 (Character & Dice)**
 
 ---
 
@@ -48,7 +48,7 @@
 | 3 | Lobby realtime: presence, chat, dice 5 แบบการมองเห็น | ✅ Phase 1 |
 | 4 | Map: อัปโหลด, grid square/hex, token ลาก/snap sync ทุกคน | ✅ Phase 2 |
 | 5 | Manual Fog of War (กรองที่ server) | ✅ Phase 2 |
-| 6 | Initiative tracker + HP/damage/conditions บน token | ⏳ Phase 4 (ถัดไป) |
+| 6 | Initiative tracker + HP/damage/conditions บน token | ✅ Phase 4 |
 
 ---
 
@@ -58,8 +58,8 @@
 | --- | --- | --- |
 | 1 Foundation | setup, auth, campaign, lobby, DB, roles, character system | ✅ เสร็จ |
 | 2 Core VTT | asset upload, map canvas, grid, token, fog, realtime sync, save status, reconnect | ✅ เสร็จ |
-| 4 Combat *(ทำก่อน 3 เพื่อปิด MVP)* | combat mode, initiative, turn/round, HP/damage/healing บน token, conditions, combat HUD | ⏭ ถัดไป |
-| 3 Character & Dice | character creator wizard, dice animation, character import (PDF/รูป), token↔character HP sync, ability checks จาก token | |
+| 4 Combat *(ทำก่อน 3 เพื่อปิด MVP)* | combat mode, initiative, turn/round, HP/damage/healing บน token, conditions, combat HUD | ✅ เสร็จ |
+| 3 Character & Dice | character creator wizard, dice animation, character import (PDF/รูป), ability checks จาก token *(token↔character HP sync ทำแล้วใน Phase 4)* | ⏭ ถัดไป |
 | 5 DM Toolkit | NPC/Monster library, encounter builder, journal, handouts, DM screen, random tables | |
 | 6 Music | audio upload, playlist, ambient, realtime sync | |
 | 7 Advanced | spells/AoE, inventory, scene templates, undo/redo, session recap, timeline, drawing tools, custom layers | |
@@ -126,6 +126,51 @@
 - ยังไม่มี pinch-zoom บนมือถือ, undo/redo ของ token (Phase 7), drawing tools และ custom layers (Phase 7)
 - หน้าเดิมของ Phase 1 (dashboard, lobby, character sheet) ยังเป็นภาษาอังกฤษ — แปลต่อใน TODO
 
+### 2026-11-04 — Phase 4: Combat ✅ (ปิด MVP)
+
+**สิ่งที่ใช้งานได้จริง**
+
+- **Combat mode** (หนึ่งการต่อสู้ต่อแคมเปญ, กันเริ่มซ้อนด้วย unique index): DM เริ่มการต่อสู้ด้วย token สิ่งมีชีวิตทั้งหมดบนแผนที่
+  หรือเฉพาะ token ที่เลือก, เพิ่ม token ระหว่างต่อสู้, เพิ่มผู้ร่วมต่อสู้ที่ไม่มี token (เช่น summon), นำออก, จบการต่อสู้
+- **Initiative**: ทอยที่ server (d20 + bonus จาก DEX ของ character sheet หรือค่าบน token) และลงใน dice log;
+  DM ทอยให้ NPC/ทุกคน, ผู้เล่นทอยของตัวเองได้ครั้งเดียว, DM แก้ค่าได้; เรียงตาม initiative → bonus → ลำดับ DM → ชื่อ;
+  initiative ของมอนสเตอร์ที่ซ่อนเป็น DM-only
+- **Turn / round**: Next / Back (DM), ผู้เล่นกด "จบตาของฉัน" ได้เฉพาะตาตัวเอง, ข้ามตัวที่ defeated, ขึ้น round ใหม่อัตโนมัติ,
+  กันกดซ้ำข้ามสองตาด้วย version, token ที่ถึงตามีวงแสงบนแผนที่ทุก client
+- **HP**: Damage (เลือก damage type 13 ชนิดของ SRD) / Heal / Temp HP / Set HP (DM) ผ่าน rules engine —
+  immunity → 0, resistance หารครึ่งปัดลง, vulnerability ×2, temp HP รับก่อนและไม่ stack, heal เริ่มจาก 0;
+  HP ของ PC เขียนลง character sheet โดยตรง (sheet กับ token ตรงกันเสมอ), มอนสเตอร์/NPC เก็บบน token พร้อม AC, initiative bonus, defenses;
+  มอนสเตอร์ที่ HP เหลือ 0 ถูกทำเครื่องหมาย defeated อัตโนมัติ (PC ไม่ เพราะต้องทอย death save)
+- **Conditions** ตาม ruleset (ตรวจที่ server) พร้อมจำนวน round; นับถอยหลังตอนจบตาของสิ่งมีชีวิตนั้นและหมดอายุเอง; exhaustion มี level
+- **ใครเห็น HP**: ตั้งต่อ token — ทุกคน / เจ้าของ+DM / DM เท่านั้น (ค่าเริ่มต้น: PC = ทุกคน, มอนสเตอร์ = DM); server ตัดข้อมูลออกก่อนส่ง
+- **Combat HUD**: initiative list (HP bar, conditions, defeated, ซ่อน), round counter, ป้าย "ตาของคุณ", action economy
+  (Action / Bonus action / Reaction / Object interaction / movement) ของตัวที่ถึงตา, HP bar + จำนวน condition บน token
+- แก้ character sheet ผ่าน REST แล้ว token และ initiative list อัปเดตให้ทุกคนทันที
+
+**การทดสอบ (รันจริงทั้งหมด)**
+
+| ชุด | ผล |
+| --- | --- |
+| `packages/rules` unit (เพิ่ม damage/initiative/turn/conditions 10 ตัว) | 125/125 ✅ |
+| `apps/server` integration กับ Postgres จริง (เพิ่ม combat 3 ชุด: permissions, การซ่อนข้อมูล, turn flow, damage/resistance/temp HP, sheet sync, conditions หมดอายุ) | 43/43 ✅ |
+| `apps/web` unit | 6/6 ✅ |
+| E2E Phase 4 (`e2e/phase4.e2e.cjs`): DM + ผู้เล่น (UI ไทย) — ตั้ง HP/AC/resistance มอนสเตอร์, ผู้เล่นไม่เห็น HP มอนสเตอร์, เริ่มต่อสู้, ผู้เล่นทอย initiative, DM ทอย NPC + แก้ลำดับ, highlight ตา, action economy sync, ผู้เล่นจบตาตัวเอง, round 2, fire damage ถูกหารครึ่ง, ผู้เล่นรับดาเมจ/ใส่ condition ให้ตัวเอง, sheet อัปเดต, condition หมดอายุ, มอนสเตอร์ defeated, reload คง state, จบการต่อสู้, ไม่มี console error | ✅ |
+| E2E Phase 1 + Phase 2 (regression) | ✅ |
+| `pnpm typecheck` ทั้ง 3 package | ✅ |
+
+**Error ที่พบระหว่างทดสอบและแก้แล้ว**
+
+1. แก้ AC/resistance ของ token แล้วค่าที่กำลังพิมพ์ในช่องอื่นหาย (form ถูก remount ทุกครั้งที่ token version เปลี่ยน) → เก็บ draft ไว้ขณะแก้ และรับค่าจาก server เมื่อไม่ได้แก้อยู่
+2. Checkbox action economy ไม่ติ๊กทันที (รอ server) → optimistic update + rollback
+3. Token ใหม่วางซ้อนกันตรงกลางจอจนคลิกเลือกตัวล่างไม่ได้ → หา cell ว่างใกล้กลางจอก่อนวาง
+4. HP bar ใน initiative list ไม่มีสี (ใช้สีที่ไม่มีใน theme) และเครื่องหมาย defeated มองยากบน token สีแดง → แก้สี + ขอบตัวอักษร
+
+**ข้อจำกัดที่ยังมี**
+
+- Back (ย้อนตา) ไม่คืน condition ที่หมดอายุไปแล้ว — DM ใส่กลับเองได้
+- Death saves ยังไม่มีปุ่มใน combat HUD (ทอยจาก character sheet ได้) · ลากสลับลำดับ initiative ยังไม่มี (แก้ตัวเลขแทน)
+- ระยะเคลื่อนที่ที่ใช้ต้องกรอกเอง ยังไม่คำนวณจากการลาก token
+
 ---
 
 ## 5. วิธีรันและทดสอบ
@@ -139,5 +184,5 @@ cp apps/server/.env.example apps/server/.env
 pnpm db:migrate && pnpm dev                    # http://localhost:5173
 TEST_DATABASE_URL=postgres://… pnpm test       # unit + integration
 pnpm --filter @vtt/web build && (cd apps/server && WEB_DIST=../web/dist WEB_ORIGIN=http://localhost:3001 pnpm start)
-BASE_URL=http://localhost:3001 node e2e/phase1.e2e.cjs && BASE_URL=http://localhost:3001 node e2e/phase2.e2e.cjs
+for f in phase1 phase2 phase4; do BASE_URL=http://localhost:3001 node e2e/$f.e2e.cjs; done
 ```

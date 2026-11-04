@@ -32,6 +32,10 @@ interface Props {
   spaceHeld: boolean;
   diagonal: DiagonalRule;
   selectedId: string | null;
+  /** Token whose turn it is in the running combat. */
+  activeTokenId?: string | null;
+  /** Tokens marked defeated in the running combat. */
+  defeatedIds?: Set<string>;
   onSelect(id: string | null): void;
   onMoveToken(id: string, x: number, y: number): void;
   onFogShape(mode: "reveal" | "hide", shape: FogShape): void;
@@ -48,7 +52,7 @@ const MAX_SCALE = 6;
 const layerOrder = (l: TokenDto["layer"]) => TOKEN_LAYERS.indexOf(l);
 
 export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(props, ref) {
-  const { scene, tokens, fog, myId, isGM, tool, fogShape, spaceHeld, diagonal, selectedId, onSelect, onMoveToken, onFogShape } = props;
+  const { scene, tokens, fog, myId, isGM, tool, fogShape, spaceHeld, diagonal, selectedId, activeTokenId, defeatedIds, onSelect, onMoveToken, onFogShape } = props;
   const wrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
@@ -257,6 +261,8 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(p
               token={t}
               cell={scene.grid.size}
               selected={t.id === selectedId}
+              active={t.id === activeTokenId}
+              defeated={!!defeatedIds?.has(t.id)}
               draggable={(tool === "select") && !spaceHeld && canControlToken(t, viewer)}
               ghost={isGM && (t.hidden || t.layer === "dm")}
               onSelect={onSelect}

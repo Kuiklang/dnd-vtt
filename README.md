@@ -27,7 +27,8 @@
 | Token: วาง/ลาก/snap, ซ่อน/ล็อก/layer/ผู้ควบคุม, sync realtime ต่อผู้รับ | ✅ |
 | Fog of War แบบ manual (rect/circle/polygon, กรอง token ที่ server) + วัดระยะตาม ruleset | ✅ |
 | UI ไทย / อังกฤษ | ✅ framework + หน้าโต๊ะ, หน้าอื่นกำลังแปล |
-| Combat / Music / DM Toolkit / Dynamic lighting | ⏳ Phase 3–8 (ดู [docs/ROADMAP.md](docs/ROADMAP.md)) |
+| Combat: initiative, turns/rounds, HP/damage/resistances, conditions, action economy | ✅ Phase 4 |
+| Music / DM Toolkit / Dynamic lighting | ⏳ Phase 5–8 (ดู [docs/ROADMAP.md](docs/ROADMAP.md)) |
 
 ## Tech stack
 

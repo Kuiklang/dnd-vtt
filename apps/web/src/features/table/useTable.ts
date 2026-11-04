@@ -3,7 +3,10 @@ import type { FogShape } from "@vtt/rules";
 import { api, errorMessage } from "../../lib/api";
 import { emitAck, getSocket } from "../../lib/socket";
 import { toast } from "../../stores/toast";
-import type { FogOpDto, SceneDto, SceneState, TokenDto } from "./types";
+import type { FogOpDto, SceneDto, SceneState, TokenDto, TokenStats } from "./types";
+
+/** Token fields a client may send (stats are write-only; reads come back as vitals). */
+export type TokenInput = Partial<TokenDto> & { stats?: TokenStats | null };
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -150,7 +153,7 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
   // ---- Token actions --------------------------------------------------------
 
   const createToken = useCallback(
-    async (token: Partial<TokenDto> & { x: number; y: number }) => {
+    async (token: TokenInput & { x: number; y: number }) => {
       const t = await track(emitAck<TokenDto>("token:create", { ...ref(), token: stripTokenInput(token) }));
       setTokens((m) => new Map(m).set(t.id, t));
       return t;
@@ -159,9 +162,12 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
   );
 
   const updateToken = useCallback(
-    async (id: string, patch: Partial<TokenDto>) => {
+    async (id: string, patch: TokenInput) => {
       const before = tokensRef.current.get(id);
-      if (before) setTokens((m) => new Map(m).set(id, { ...before, ...patch }));
+      if (before) {
+        const { stats: _stats, ...visible } = patch;
+        setTokens((m) => new Map(m).set(id, { ...before, ...visible }));
+      }
       try {
         const t = await track(emitAck<TokenDto>("token:update", { ...ref(), tokenId: id, patch: stripTokenInput(patch) }));
         setTokens((m) => {
@@ -299,10 +305,12 @@ const TOKEN_INPUT_KEYS = [
   "locked",
   "showName",
   "ownerIds",
+  "hpVisibility",
+  "stats",
 ] as const;
 
 /** Only send fields the server accepts as token input. */
-function stripTokenInput(t: Partial<TokenDto>): Record<string, unknown> {
+function stripTokenInput(t: TokenInput): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const k of TOKEN_INPUT_KEYS) if (t[k] !== undefined) out[k] = t[k];
   return out;

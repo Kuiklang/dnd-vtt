@@ -9,7 +9,7 @@ MVP = สิ่งที่กลุ่มหนึ่งใช้เล่น�
 3. ✅ Lobby realtime: presence, chat, dice (public/private/whisper/blind/DM-only)
 4. ✅ Map canvas + upload map + grid + token (ลาก/วาง sync ทุกคน) — **Phase 2**
 5. ✅ Manual Fog of War — **Phase 2**
-6. ⏳ Initiative tracker + HP/damage/conditions บน token — **Phase 4** (ดึงมาก่อนส่วนอื่นของ Phase 3 ได้)
+6. ✅ Initiative tracker + HP/damage/conditions บน token — **Phase 4**
 
 เมื่อครบ 1–6 ถือว่า MVP พร้อมทดลองเล่นจริง (alpha)
 
@@ -20,7 +20,7 @@ MVP = สิ่งที่กลุ่มหนึ่งใช้เล่น�
 | 1 Foundation | project setup, auth, campaign, lobby, DB, basic UI, roles, character system | ✅ เสร็จ (ดูรายละเอียดด้านล่าง) |
 | 2 Core VTT | map canvas (Konva), upload map (asset storage), token + placement, grid (square/hex), manual fog, multiplayer state sync, save system | ✅ เสร็จ (ดู PROJECT_PLAN.md) |
 | 3 Character & Dice | character creator wizard, 3D/2D dice animation + sound, character import (PDF/image → OCR/AI → review), token linking, ability checks จาก token | |
-| 4 Combat (ถัดไป — ดึงมาก่อน Phase 3 เพื่อปิด MVP) | combat mode, initiative tracker, turn/round, HP/damage (resistance/vulnerability/immunity), healing, conditions + duration, combat HUD, action economy | |
+| 4 Combat (ถัดไป — ดึงมาก่อน Phase 3 เพื่อปิด MVP) | combat mode, initiative tracker, turn/round, HP/damage (resistance/vulnerability/immunity), healing, conditions + duration, combat HUD, action economy | ✅ |
 | 5 DM Toolkit | NPC/Monster library (SRD), encounter builder, journal (Markdown), handouts, DM Screen (panels), random tables, custom rulesets UI | |
 | 6 Music | audio upload, playlists, ambient layers, realtime sync (DM controls, player local volume) | |
 | 7 Advanced | spell library + casting + AoE templates, inventory transfer, measurement, scene templates & switching, undo/redo, session recap, timeline | |

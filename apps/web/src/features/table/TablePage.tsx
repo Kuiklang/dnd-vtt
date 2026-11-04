@@ -14,6 +14,8 @@ import { MapCanvas, type MapCanvasHandle } from "./canvas/MapCanvas";
 import { ScenePanel } from "./ScenePanel";
 import { TokenPanel } from "./TokenPanel";
 import { useTable, type SaveStatus, type Table } from "./useTable";
+import { useCombat } from "./useCombat";
+import { CombatPanel } from "./CombatPanel";
 import type { FogShapeKind, Tool } from "./types";
 
 export function TablePage() {
@@ -41,6 +43,7 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
   const caps = useMemo(() => new Set<Capability>(detail.me.capabilities), [detail.me.capabilities]);
   const isGM = caps.has("map.manage");
   const table = useTable(detail.campaign.id, isGM, lobby.connection === "connected");
+  const combat = useCombat(detail.campaign.id, lobby.connection === "connected");
   const canvasRef = useRef<MapCanvasHandle>(null);
   const [tool, setTool] = useState<Tool>("select");
   const [fogShape, setFogShape] = useState<FogShapeKind>("rect");
@@ -54,6 +57,14 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
   const diagonal = ruleset?.movement.diagonal ?? "uniform";
   const selected = selectedId ? (table.tokens.get(selectedId) ?? null) : null;
   const tokens = useMemo(() => [...table.tokens.values()], [table.tokens]);
+  const activeTokenId = useMemo(() => {
+    const c = combat.combat;
+    return c?.combatants.find((x) => x.id === c.activeCombatantId)?.tokenId ?? null;
+  }, [combat.combat]);
+  const defeatedIds = useMemo(
+    () => new Set((combat.combat?.combatants ?? []).filter((x) => x.defeated && x.tokenId).map((x) => x.tokenId!)),
+    [combat.combat],
+  );
   const members = detail.members.map((m) => ({ userId: m.userId, name: m.user.displayName }));
   const presence = new Map(lobby.presence.map((p) => [p.userId, p]));
 
@@ -106,8 +117,22 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
   const dropPoint = useCallback(() => {
     const c = canvasRef.current?.viewCenter() ?? { x: 100, y: 100 };
     const s = table.scene;
-    return s ? { x: Math.min(Math.max(c.x, 0), s.width), y: Math.min(Math.max(c.y, 0), s.height) } : c;
-  }, [table.scene]);
+    if (!s) return c;
+    const clamp = (p: { x: number; y: number }) => ({ x: Math.min(Math.max(p.x, 0), s.width), y: Math.min(Math.max(p.y, 0), s.height) });
+    // Don't stack a new token on top of an existing one: walk outwards cell by cell to a free spot.
+    const step = s.grid.size;
+    const taken = (p: { x: number; y: number }) => [...table.tokens.values()].some((tk) => Math.hypot(tk.x - p.x, tk.y - p.y) < step * 0.5);
+    for (let ring = 0; ring < 6; ring++) {
+      for (let dx = -ring; dx <= ring; dx++) {
+        for (let dy = -ring; dy <= ring; dy++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
+          const p = clamp({ x: c.x + dx * step, y: c.y + dy * step });
+          if (!taken(p)) return p;
+        }
+      }
+    }
+    return clamp(c);
+  }, [table.scene, table.tokens]);
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] flex-col">
@@ -192,6 +217,8 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
               spaceHeld={spaceHeld}
               diagonal={diagonal}
               selectedId={selectedId}
+              activeTokenId={activeTokenId}
+              defeatedIds={defeatedIds}
               onSelect={setSelectedId}
               onMoveToken={onMoveToken}
               onFogShape={onFogShape}
@@ -201,9 +228,22 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
 
         {/* Right sidebar */}
         <Sidebar open={rightOpen} onToggle={() => { setRightOpen((o) => !o); if (!wide) setLeftOpen(false); }} side="right">
+          {(combat.combat || (isGM && table.scene)) && (
+            <Section title={t("combat.title")}>
+              <CombatPanel
+                combat={combat}
+                sceneId={table.sceneId}
+                tokens={tokens}
+                myId={detail.me.userId}
+                isGM={caps.has("combat.manage")}
+                selectedId={selectedId}
+                onSelectToken={setSelectedId}
+              />
+            </Section>
+          )}
           {table.scene && (
             <Section title={t("tokens.title")}>
-              <TokenPanel table={table} detail={detail} isGM={isGM} selected={selected} dropPoint={dropPoint} onSelect={setSelectedId} />
+              <TokenPanel table={table} detail={detail} isGM={isGM} selected={selected} combat={combat} ruleset={ruleset} dropPoint={dropPoint} onSelect={setSelectedId} />
             </Section>
           )}
           {caps.has("fog.manage") && table.scene && <FogPanel table={table} />}
