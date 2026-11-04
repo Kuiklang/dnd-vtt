@@ -41,6 +41,9 @@ const skills: SkillDef[] = [
   { id: "survival", name: "Survival", ability: "wis" },
 ];
 
+/** SRD damage types (identical in SRD 5.1 and 5.2). */
+const damageTypes = ["acid", "bludgeoning", "cold", "fire", "force", "lightning", "necrotic", "piercing", "poison", "psychic", "radiant", "slashing", "thunder"];
+
 const baseConditions: ConditionDef[] = [
   { id: "blinded", name: "Blinded", summary: "Can't see; fails sight checks. Attacks against it have advantage, its attacks have disadvantage." },
   { id: "charmed", name: "Charmed", summary: "Can't harm the charmer; the charmer has advantage on social checks against it." },
@@ -85,6 +88,7 @@ export const DND5E_2014: RulesetDefinition = {
   maxLevel: 20,
   abilityScore: { min: 1, max: 30 },
   xpThresholds: XP,
+  damageTypes,
   movement: { unitsPerSquare: 5, unit: "ft", diagonal: "uniform" },
   combat: {
     criticalOn: 20,
@@ -118,6 +122,7 @@ export const DND5E_2024: RulesetDefinition = {
   maxLevel: 20,
   abilityScore: { min: 1, max: 30 },
   xpThresholds: XP,
+  damageTypes,
   movement: { unitsPerSquare: 5, unit: "ft", diagonal: "uniform" },
   combat: {
     criticalOn: 20,

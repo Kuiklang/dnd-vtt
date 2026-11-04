@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { GRID_TYPES, TOKEN_LAYERS, TOKEN_SHAPES } from "@vtt/rules";
+import { GRID_TYPES, HP_VISIBILITY, TOKEN_LAYERS, TOKEN_SHAPES } from "@vtt/rules";
 import { requireAuth } from "../auth/routes.js";
 import { cleanText, parse } from "../lib/validation.js";
 import { toSceneDto } from "./service.js";
@@ -34,6 +34,22 @@ export const sceneCreateSchema = z.object({ ...sceneFields }).partial().required
 export const sceneUpdateSchema = z.object({ ...sceneFields, expectedVersion: z.number().int().min(1) }).partial();
 
 const coord = z.number().min(-1e6).max(1e6);
+const int = (min: number, max: number) => z.number().int().min(min).max(max);
+const damageTypes = z.array(cleanText(30).pipe(z.string().min(1))).max(20);
+export const defensesSchema = z.object({ resistances: damageTypes, vulnerabilities: damageTypes, immunities: damageTypes });
+export const tokenConditionSchema = z.object({
+  id: cleanText(40).pipe(z.string().min(1)),
+  level: int(1, 20).optional(),
+  source: cleanText(80).optional(),
+  durationRounds: int(0, 100000).nullable(),
+});
+export const tokenStatsSchema = z.object({
+  hp: z.object({ current: int(-10000, 10000), max: int(0, 10000), temp: int(0, 10000) }),
+  ac: int(0, 50).nullable(),
+  initiativeBonus: int(-20, 50),
+  conditions: z.array(tokenConditionSchema).max(30),
+  defenses: defensesSchema,
+});
 export const tokenFields = z.object({
   characterId: z.uuid().nullable(),
   name: cleanText(60),
@@ -50,6 +66,8 @@ export const tokenFields = z.object({
   locked: z.boolean(),
   showName: z.boolean(),
   ownerIds: z.array(z.uuid()).max(20),
+  hpVisibility: z.enum(HP_VISIBILITY),
+  stats: tokenStatsSchema.nullable(),
 });
 
 const params = z.object({ id: z.uuid(), sceneId: z.uuid() });

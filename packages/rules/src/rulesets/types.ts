@@ -51,6 +51,8 @@ export interface RulesetDefinition {
   abilities: AbilityDef[];
   skills: SkillDef[];
   conditions: ConditionDef[];
+  /** Damage types this system recognises (resistance/vulnerability/immunity keys). */
+  damageTypes: string[];
   /** Proficiency bonus for levels 1..N (index 0 = level 1). */
   proficiencyByLevel: number[];
   maxLevel: number;

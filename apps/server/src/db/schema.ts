@@ -13,7 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { CharacterData, FogShape, GridSettings, RollResult } from "@vtt/rules";
+import type { ActionEconomy, CharacterData, Defenses, FogShape, GridSettings, HpState, RollResult, TokenCondition } from "@vtt/rules";
 
 
 /*
@@ -39,6 +39,8 @@ export const assetKind = pgEnum("asset_kind", ["map", "token", "portrait", "avat
 export const tokenLayer = pgEnum("token_layer", ["map", "objects", "tokens", "dm"]);
 export const tokenShape = pgEnum("token_shape", ["circle", "square"]);
 export const fogMode = pgEnum("fog_mode", ["reveal", "hide"]);
+export const hpVisibility = pgEnum("hp_visibility", ["everyone", "owners", "gm"]);
+export const combatStatus = pgEnum("combat_status", ["active", "ended"]);
 export const gameSessionStatus = pgEnum("game_session_status", ["active", "paused", "ended"]);
 
 export const users = pgTable(
@@ -321,11 +323,25 @@ export const tokens = pgTable(
     locked: boolean("locked").notNull().default(false),
     showName: boolean("show_name").notNull().default(true),
     ownerIds: uuid("owner_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    hpVisibility: hpVisibility("hp_visibility").notNull().default("gm"),
+    /**
+     * Vitals for tokens without a character sheet (monsters/props). Tokens linked to a
+     * character read and write HP/conditions on the character instead (single source of truth).
+     */
+    stats: jsonb("stats").$type<TokenStats>(),
     version: integer("version").notNull().default(1),
     ...timestamps,
   },
-  (t) => [index("tokens_scene_idx").on(t.sceneId), index("tokens_campaign_idx").on(t.campaignId)],
+  (t) => [index("tokens_character_idx").on(t.characterId), index("tokens_scene_idx").on(t.sceneId), index("tokens_campaign_idx").on(t.campaignId)],
 );
+
+export interface TokenStats {
+  hp: HpState;
+  ac: number | null;
+  initiativeBonus: number;
+  conditions: TokenCondition[];
+  defenses: Defenses;
+}
 
 export const fogOps = pgTable(
   "fog_ops",
@@ -343,6 +359,65 @@ export const fogOps = pgTable(
   },
   (t) => [index("fog_ops_scene_seq_idx").on(t.sceneId, t.seq)],
 );
+
+/*
+ * Phase 4: combat.
+ */
+
+export const combats = pgTable(
+  "combats",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    sceneId: uuid("scene_id").references(() => scenes.id, { onDelete: "set null" }),
+    status: combatStatus("status").notNull().default("active"),
+    round: integer("round").notNull().default(1),
+    turnIndex: integer("turn_index").notNull().default(0),
+    /** Combatant whose turn it is (kept alongside turnIndex so reorders don't jump the turn). */
+    activeCombatantId: uuid("active_combatant_id"),
+    version: integer("version").notNull().default(1),
+    startedBy: uuid("started_by").references(() => users.id, { onDelete: "set null" }),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("combats_campaign_idx").on(t.campaignId),
+    // One running combat per campaign.
+    uniqueIndex("combats_one_active_idx").on(t.campaignId).where(sql`${t.status} = 'active'`),
+  ],
+);
+
+export const combatants = pgTable(
+  "combatants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    combatId: uuid("combat_id")
+      .notNull()
+      .references(() => combats.id, { onDelete: "cascade" }),
+    tokenId: uuid("token_id").references(() => tokens.id, { onDelete: "set null" }),
+    characterId: uuid("character_id").references(() => characters.id, { onDelete: "set null" }),
+    name: text("name").notNull(),
+    initiative: integer("initiative"),
+    initiativeBonus: integer("initiative_bonus").notNull().default(0),
+    sortOrder: integer("sort_order").notNull().default(0),
+    /** Hidden from players in the tracker (e.g. an ambusher not yet revealed). */
+    hidden: boolean("hidden").notNull().default(false),
+    defeated: boolean("defeated").notNull().default(false),
+    actions: jsonb("actions").$type<ActionEconomy>().notNull(),
+    /** Owners copied from the token at join time (who may roll initiative / end the turn). */
+    ownerIds: uuid("owner_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("combatants_combat_idx").on(t.combatId),
+    uniqueIndex("combatants_token_unique_idx").on(t.combatId, t.tokenId).where(sql`${t.tokenId} is not null`),
+  ],
+);
+
+export type CombatRow = typeof combats.$inferSelect;
+export type CombatantRow = typeof combatants.$inferSelect;
 
 export type AssetRow = typeof assets.$inferSelect;
 export type SceneRow = typeof scenes.$inferSelect;

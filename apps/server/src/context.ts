@@ -8,6 +8,7 @@ import type { ChatService } from "./chat/service.js";
 import type { Realtime } from "./realtime/socket.js";
 import type { AssetService } from "./assets/service.js";
 import type { SceneService } from "./scenes/service.js";
+import type { CombatService } from "./combat/service.js";
 
 export interface AppContext {
   config: Config;
@@ -18,6 +19,7 @@ export interface AppContext {
   chat: ChatService;
   assets: AssetService;
   scenes: SceneService;
+  combat: CombatService;
   /** Set once Socket.IO is attached; services use it to broadcast REST-originated changes. */
   realtime?: Realtime;
 }

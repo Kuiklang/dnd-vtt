@@ -10,6 +10,17 @@ export type TokenLayer = (typeof TOKEN_LAYERS)[number];
 export const TOKEN_SHAPES = ["circle", "square"] as const;
 export type TokenShape = (typeof TOKEN_SHAPES)[number];
 
+/** Who may see a token's HP/AC/conditions. */
+export const HP_VISIBILITY = ["everyone", "owners", "gm"] as const;
+export type HpVisibility = (typeof HP_VISIBILITY)[number];
+
+export interface TokenCondition {
+  id: string;
+  level?: number;
+  source?: string;
+  durationRounds: number | null;
+}
+
 export interface TokenState {
   id: string;
   sceneId: string;
@@ -31,7 +42,14 @@ export interface TokenState {
   showName: boolean;
   /** Users allowed to move/control this token (besides GMs). */
   ownerIds: string[];
+  hpVisibility: HpVisibility;
   version: number;
+}
+
+/** Whether a viewer may see this token's HP, AC and conditions. */
+export function canSeeTokenVitals(t: Pick<TokenState, "hpVisibility" | "ownerIds">, viewer: TokenViewer): boolean {
+  if (viewer.isGameMaster || t.hpVisibility === "everyone") return true;
+  return t.hpVisibility === "owners" && t.ownerIds.includes(viewer.userId);
 }
 
 export interface TokenViewer {

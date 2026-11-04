@@ -2,8 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { Server, type Socket } from "socket.io";
 import { z } from "zod";
 import { CHAT_CHANNELS, FOG_SHAPES, ROLL_VISIBILITIES, canSeeChatMessage, canSeeToken, type CampaignRole, type FogShape } from "@vtt/rules";
-import { tokenFields } from "../scenes/routes.js";
-import { toSceneDto, toTokenDto, type TokenDto } from "../scenes/service.js";
+import { tokenConditionSchema, tokenFields } from "../scenes/routes.js";
+import type { CombatEffects } from "../combat/service.js";
+import { redactToken, toSceneDto, toTokenDto } from "../scenes/service.js";
 import { SESSION_COOKIE, type AppContext } from "../context.js";
 import { HttpError } from "../lib/errors.js";
 import { rollForViewer, viewerFor, type ChatMessageDto, type RollDto } from "../chat/service.js";
@@ -60,6 +61,22 @@ const rollSchema = campaignIdSchema.extend({
 });
 
 const sceneRef = campaignIdSchema.extend({ sceneId: z.uuid() });
+const hpAmount = z.number().int().min(0).max(100000);
+const hpActionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("damage"), amount: hpAmount, damageType: cleanText(30).nullable().optional() }),
+  z.object({ kind: z.literal("heal"), amount: hpAmount }),
+  z.object({ kind: z.literal("temp"), amount: hpAmount }),
+  z.object({
+    kind: z.literal("set"),
+    current: z.number().int().min(-10000).max(10000),
+    max: z.number().int().min(0).max(10000).optional(),
+    temp: z.number().int().min(0).max(10000).optional(),
+  }),
+]);
+const combatantRef = campaignIdSchema.extend({ combatantId: z.uuid() });
+const actionsPatch = z
+  .object({ action: z.boolean(), bonusAction: z.boolean(), reaction: z.boolean(), freeInteraction: z.boolean(), movementUsed: z.number().min(0).max(10000) })
+  .partial();
 const point = z.object({ x: z.number(), y: z.number() });
 const fogShapeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal(FOG_SHAPES[0]), x: z.number(), y: z.number(), width: z.number(), height: z.number() }),
@@ -206,7 +223,8 @@ export class Realtime {
         chat.history(m, { limit: 100 }),
         chat.rollHistory(m, { limit: 50 }),
       ]);
-      return { presence: this.presenceFor(campaignId), messages, rolls };
+      const combatState = await this.ctx.combat.state(m);
+      return { presence: this.presenceFor(campaignId), messages, rolls, combat: combatState };
     });
 
     this.handle(s, "campaign:leave", campaignIdSchema, async ({ campaignId }) => {
@@ -262,14 +280,14 @@ export class Realtime {
     this.handle(s, "token:create", sceneRef.extend({ token: tokenFields.partial().required({ x: true, y: true }) }), async (i) => {
       const m = await campaigns.membership(i.campaignId, data.userId);
       const dto = await scenes.createToken(m, i.sceneId, i.token);
-      await this.broadcastToken(i.campaignId, i.sceneId, dto);
+      await this.broadcastToken(i.campaignId, i.sceneId, dto.id);
       return dto;
     });
 
     this.handle(s, "token:update", sceneRef.extend({ tokenId: z.uuid(), patch: tokenFields.partial() }), async (i) => {
       const m = await campaigns.membership(i.campaignId, data.userId);
       const dto = await scenes.updateToken(m, i.sceneId, i.tokenId, i.patch);
-      await this.broadcastToken(i.campaignId, i.sceneId, dto);
+      await this.broadcastToken(i.campaignId, i.sceneId, dto.id);
       return dto;
     });
 
@@ -304,6 +322,83 @@ export class Realtime {
       const m = await campaigns.membership(i.campaignId, data.userId);
       await scenes.setFogEnabled(m, i.sceneId, i.enabled);
       await this.sendSceneState(i.campaignId, i.sceneId);
+    });
+
+    // ---- Combat -----------------------------------------------------------
+
+    const { combat } = this.ctx;
+    /** Runs a combat mutation, then pushes the new state (and any side-effect tokens) to everyone. */
+    const combatOp = async (campaignId: string, fn: (m: Awaited<ReturnType<typeof campaigns.membership>>) => Promise<CombatEffects | void>) => {
+      const m = await campaigns.membership(campaignId, data.userId);
+      const fx = await fn(m);
+      if (fx) await this.applyEffects(campaignId, fx);
+      await this.broadcastCombat(campaignId);
+      return combat.state(m);
+    };
+
+    this.handle(s, "combat:get", campaignIdSchema, async ({ campaignId }) => {
+      return combat.state(await campaigns.membership(campaignId, data.userId));
+    });
+
+    this.handle(s, "combat:start", sceneRef.extend({ tokenIds: z.array(z.uuid()).max(100).optional() }), async (i) =>
+      combatOp(i.campaignId, (m) => combat.start(m, i.sceneId, i.tokenIds)),
+    );
+
+    this.handle(s, "combat:end", campaignIdSchema, async (i) => combatOp(i.campaignId, (m) => combat.end(m)));
+
+    this.handle(s, "combat:add", campaignIdSchema.extend({ tokenIds: z.array(z.uuid()).min(1).max(100) }), async (i) =>
+      combatOp(i.campaignId, (m) => combat.addTokens(m, i.tokenIds)),
+    );
+
+    this.handle(
+      s,
+      "combat:addCustom",
+      campaignIdSchema.extend({ name: cleanText(60).pipe(z.string().min(1)), initiativeBonus: z.number().int().min(-20).max(50).default(0), hidden: z.boolean().default(false) }),
+      async ({ campaignId, ...input }) => combatOp(campaignId, (m) => combat.addCustom(m, input)),
+    );
+
+    this.handle(s, "combat:remove", combatantRef, async (i) => combatOp(i.campaignId, (m) => combat.remove(m, i.combatantId)));
+
+    this.handle(
+      s,
+      "combat:roll",
+      campaignIdSchema.extend({ which: z.union([z.enum(["all", "npcs"]), z.array(z.uuid()).min(1).max(100)]) }),
+      async (i) => combatOp(i.campaignId, (m) => combat.rollInitiative(m, i.which)),
+    );
+
+    this.handle(s, "combat:setInitiative", combatantRef.extend({ value: z.number().int().min(-100).max(1000).nullable() }), async (i) =>
+      combatOp(i.campaignId, (m) => combat.setInitiative(m, i.combatantId, i.value)),
+    );
+
+    this.handle(s, "combat:next", campaignIdSchema.extend({ expectedVersion: z.number().int().min(1).optional() }), async (i) =>
+      combatOp(i.campaignId, (m) => combat.next(m, i.expectedVersion)),
+    );
+
+    this.handle(s, "combat:prev", campaignIdSchema, async (i) => combatOp(i.campaignId, (m) => combat.previous(m)));
+
+    this.handle(
+      s,
+      "combat:update",
+      combatantRef.extend({
+        patch: z.object({ hidden: z.boolean(), defeated: z.boolean(), name: cleanText(60).pipe(z.string().min(1)), actions: actionsPatch }).partial(),
+      }),
+      async (i) => combatOp(i.campaignId, (m) => combat.updateCombatant(m, i.combatantId, i.patch)),
+    );
+
+    this.handle(s, "token:hp", campaignIdSchema.extend({ tokenId: z.uuid(), action: hpActionSchema }), async (i) => {
+      const m = await campaigns.membership(i.campaignId, data.userId);
+      const res = await combat.applyHp(m, i.tokenId, i.action);
+      await this.applyEffects(i.campaignId, res.fx);
+      await this.broadcastCombat(i.campaignId);
+      return { token: res.token, notes: res.notes, effective: res.effective };
+    });
+
+    this.handle(s, "token:conditions", campaignIdSchema.extend({ tokenId: z.uuid(), conditions: z.array(tokenConditionSchema).max(30) }), async (i) => {
+      const m = await campaigns.membership(i.campaignId, data.userId);
+      const res = await combat.setConditions(m, i.tokenId, i.conditions);
+      await this.applyEffects(i.campaignId, res.fx);
+      await this.broadcastCombat(i.campaignId);
+      return res.token;
     });
 
     s.on("disconnect", () => {
@@ -364,16 +459,19 @@ export class Realtime {
     });
   }
 
-  /** Sends a token change to each viewer, or a removal to viewers who must no longer see it. */
-  async broadcastToken(campaignId: string, sceneId: string, dto: TokenDto) {
+  /**
+   * Sends a token's current state to each viewer (re-read from the DB so every viewer gets
+   * the unredacted source and its own redaction), or a removal to viewers who mustn't see it.
+   */
+  async broadcastToken(campaignId: string, sceneId: string, tokenId: string) {
     try {
       const scene = await this.ctx.scenes.viewableRaw(campaignId, sceneId);
       if (!scene) return;
-      const { state } = await this.ctx.scenes.fogState(scene);
+      const [{ state }, dto] = await Promise.all([this.ctx.scenes.fogState(scene), this.ctx.scenes.tokenDto(tokenId)]);
       for (const v of await this.sceneViewers(campaignId, sceneId)) {
         const viewer = { userId: v.userId, isGameMaster: v.caps.has("token.manageAll") };
-        if (canSeeToken(dto, viewer, state)) v.sock.emit("token:upsert", dto);
-        else v.sock.emit("token:remove", { sceneId, tokenId: dto.id });
+        if (dto && canSeeToken(dto, viewer, state)) v.sock.emit("token:upsert", redactToken(dto, viewer));
+        else v.sock.emit("token:remove", { sceneId, tokenId });
       }
     } catch (err) {
       this.app.log.error({ err }, "broadcastToken failed");
@@ -390,7 +488,7 @@ export class Realtime {
         this.ctx.scenes.tokenRows(sceneId),
         this.ctx.scenes.activeSceneId(campaignId),
       ]);
-      const all = rows.map((r) => toTokenDto(r.token, r.portraitUrl));
+      const all = rows.map((r) => toTokenDto(r.token, r.character));
       for (const v of await this.sceneViewers(campaignId, sceneId)) {
         const isGM = v.caps.has("token.manageAll");
         if (!v.caps.has("map.manage") && activeSceneId !== sceneId) {
@@ -400,7 +498,7 @@ export class Realtime {
         const viewer = { userId: v.userId, isGameMaster: isGM };
         v.sock.emit("scene:state", {
           scene: toSceneDto(scene, activeSceneId, v.caps.has("dmNotes.view")),
-          tokens: all.filter((t) => canSeeToken(t, viewer, state)),
+          tokens: all.filter((t) => canSeeToken(t, viewer, state)).map((t) => redactToken(t, viewer)),
           fog: ops,
         });
       }
@@ -435,6 +533,42 @@ export class Realtime {
 
   characterChanged(campaignId: string, characterId: string) {
     this.io.to(room(campaignId)).emit("character:changed", { campaignId, characterId });
+    // HP/AC/conditions on linked tokens and in the tracker come from the sheet.
+    void this.applyEffects(campaignId, { tokenIds: new Set(), characterIds: new Set([characterId]), notifyCharacters: false })
+      .then(() => this.broadcastCombat(campaignId))
+      .catch((err) => this.app.log.error({ err }, "characterChanged fan-out failed"));
+  }
+
+  // ---- Combat broadcasts -----------------------------------------------------
+
+  /** Pushes each member's own view of the running combat (hidden combatants and vitals filtered). */
+  async broadcastCombat(campaignId: string) {
+    try {
+      const [sockets, caps] = await Promise.all([this.io.in(room(campaignId)).fetchSockets(), this.ctx.campaigns.memberCaps(campaignId)]);
+      const cache = new Map<string, unknown>();
+      for (const sock of sockets) {
+        const userId = (sock.data as SocketData).userId;
+        const c = caps.get(userId);
+        if (!c) continue;
+        if (!cache.has(userId)) cache.set(userId, await this.ctx.combat.stateFor(campaignId, { userId, isGameMaster: c.has("token.manageAll") }));
+        sock.emit("combat:state", { campaignId, combat: cache.get(userId) });
+      }
+    } catch (err) {
+      this.app.log.error({ err }, "broadcastCombat failed");
+    }
+  }
+
+  /** Re-broadcasts tokens touched by a combat change (directly, or through their linked character sheet). */
+  async applyEffects(campaignId: string, fx: CombatEffects & { notifyCharacters?: boolean }) {
+    const targets = new Map<string, string>();
+    if (fx.tokenIds.size) {
+      for (const t of await this.ctx.scenes.tokenScenes([...fx.tokenIds])) targets.set(t.id, t.sceneId);
+    }
+    for (const characterId of fx.characterIds) {
+      if (fx.notifyCharacters !== false) this.io.to(room(campaignId)).emit("character:changed", { campaignId, characterId });
+      for (const t of await this.ctx.scenes.tokensForCharacter(characterId)) if (t.campaignId === campaignId) targets.set(t.id, t.sceneId);
+    }
+    await Promise.all([...targets].map(([tokenId, sceneId]) => this.broadcastToken(campaignId, sceneId, tokenId)));
   }
 
   async memberRemoved(campaignId: string, userId: string) {

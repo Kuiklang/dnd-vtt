@@ -97,7 +97,7 @@ describe("token visibility and control", () => {
   const base: TokenState = {
     id: "t", sceneId: "s", characterId: null, name: "Goblin", imageAssetId: null, x: 500, y: 500, size: 1, rotation: 0,
     layer: "tokens", shape: "circle", color: "#aa0000", borderColor: "#000000", hidden: false, locked: false, showName: true,
-    ownerIds: ["p1"], version: 1,
+    ownerIds: ["p1"], hpVisibility: "gm", version: 1,
   };
   const fog: FogState = { enabled: true, ops: [] };
   const gm = { userId: "dm", isGameMaster: true };

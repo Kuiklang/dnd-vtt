@@ -90,6 +90,14 @@ export const conditionEntrySchema = z.object({
   durationRounds: int(0, 100000).nullable().default(null),
 });
 
+const damageTypeList = z.array(shortText(30).min(1)).max(20).default([]);
+export const defensesSchema = z.object({
+  resistances: damageTypeList,
+  vulnerabilities: damageTypeList,
+  immunities: damageTypeList,
+});
+export type Defenses = z.infer<typeof defensesSchema>;
+
 const slotSchema = z.object({ max: int(0, 20).default(0), used: int(0, 20).default(0) });
 
 export const characterDataSchema = z
@@ -122,6 +130,8 @@ export const characterDataSchema = z
     deathSaves: z.object({ successes: int(0, 3).default(0), failures: int(0, 3).default(0) }).default({ successes: 0, failures: 0 }),
     inspiration: z.boolean().default(false),
     conditions: z.array(conditionEntrySchema).max(30).default([]),
+    /** Damage types (ruleset ids) this creature resists / is vulnerable to / ignores. */
+    defenses: defensesSchema.default({ resistances: [], vulnerabilities: [], immunities: [] }),
     attacks: z.array(attackSchema).max(50).default([]),
     features: z.array(featureSchema).max(200).default([]),
     spellcasting: z

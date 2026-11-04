@@ -1,10 +1,18 @@
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   DEFAULT_GRID,
   MAX_FOG_OPS,
   OWNER_EDITABLE_FIELDS,
+  NO_DEFENSES,
   canControlToken,
   canSeeToken,
+  canSeeTokenVitals,
+  type CharacterData,
+  type CharacterKind,
+  type Defenses,
+  type HpState,
+  type HpVisibility,
+  type TokenCondition,
   normalizeShape,
   type FogShape,
   type FogState,
@@ -15,7 +23,7 @@ import {
   type TokenViewer,
 } from "@vtt/rules";
 import type { Db } from "../db/client.js";
-import { campaigns, characters, fogOps, scenes, tokens, type SceneRow, type TokenRow } from "../db/schema.js";
+import { campaigns, characters, fogOps, scenes, tokens, type SceneRow, type TokenRow, type TokenStats } from "../db/schema.js";
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors.js";
 import type { CampaignService, Membership } from "../campaigns/service.js";
 import { assetUrl, type AssetService } from "../assets/service.js";
@@ -44,8 +52,46 @@ export interface SceneDto {
   updatedAt: string;
 }
 
+/** HP/AC/conditions shown on a token; null when not tracked or hidden from the viewer. */
+export interface TokenVitals {
+  hp: HpState | null;
+  ac: number | null;
+  conditions: TokenCondition[];
+  defenses: Defenses;
+  /** Where the numbers live: the linked character sheet or the token itself. */
+  source: "character" | "token";
+}
+
 export interface TokenDto extends TokenState {
   imageUrl: string | null;
+  vitals: TokenVitals | null;
+  /** True when vitals exist but were withheld from this viewer. */
+  vitalsHidden: boolean;
+}
+
+export interface LinkedCharacter {
+  data: CharacterData;
+  kind: CharacterKind;
+}
+
+export function vitalsOf(t: TokenRow, character: LinkedCharacter | null): TokenVitals | null {
+  if (character) {
+    return {
+      hp: character.data.hp,
+      ac: character.data.armorClass,
+      conditions: character.data.conditions,
+      defenses: character.data.defenses ?? NO_DEFENSES,
+      source: "character",
+    };
+  }
+  if (!t.stats) return null;
+  return { hp: t.stats.hp, ac: t.stats.ac, conditions: t.stats.conditions, defenses: t.stats.defenses ?? NO_DEFENSES, source: "token" };
+}
+
+/** Copy of a token as one viewer may see it (vitals withheld per hpVisibility). */
+export function redactToken(t: TokenDto, viewer: TokenViewer): TokenDto {
+  if (!t.vitals || canSeeTokenVitals(t, viewer)) return t;
+  return { ...t, vitals: null, vitalsHidden: true };
 }
 
 export interface FogOpDto {
@@ -88,6 +134,8 @@ export interface TokenInput {
   locked: boolean;
   showName: boolean;
   ownerIds: string[];
+  hpVisibility: HpVisibility;
+  stats: TokenStats | null;
 }
 
 export const viewerOf = (m: Membership): TokenViewer => ({ userId: m.member.userId, isGameMaster: m.caps.has("token.manageAll") });
@@ -112,7 +160,8 @@ export function toSceneDto(s: SceneRow, activeSceneId: string | null, showNotes:
   };
 }
 
-export function toTokenDto(t: TokenRow, portraitUrl?: string | null): TokenDto {
+export function toTokenDto(t: TokenRow, character: LinkedCharacter | null = null): TokenDto {
+  const portraitUrl = character?.data.portraitUrl || null;
   return {
     id: t.id,
     sceneId: t.sceneId,
@@ -132,7 +181,10 @@ export function toTokenDto(t: TokenRow, portraitUrl?: string | null): TokenDto {
     locked: t.locked,
     showName: t.showName,
     ownerIds: t.ownerIds,
+    hpVisibility: t.hpVisibility,
     version: t.version,
+    vitals: vitalsOf(t, character),
+    vitalsHidden: false,
   };
 }
 
@@ -317,14 +369,35 @@ export class SceneService {
     return { state: { enabled: sceneRow.fogEnabled, ops: rows }, ops: rows };
   }
 
-  async tokenRows(sceneId: string): Promise<Array<{ token: TokenRow; portraitUrl: string | null }>> {
+  async tokenRows(sceneId: string): Promise<Array<{ token: TokenRow; character: LinkedCharacter | null }>> {
     const rows = await this.db
-      .select({ token: tokens, data: characters.data })
+      .select({ token: tokens, data: characters.data, kind: characters.kind, deletedAt: characters.deletedAt })
       .from(tokens)
       .leftJoin(characters, eq(characters.id, tokens.characterId))
       .where(eq(tokens.sceneId, sceneId))
       .orderBy(asc(tokens.createdAt));
-    return rows.map((r) => ({ token: r.token, portraitUrl: r.data?.portraitUrl || null }));
+    return rows.map((r) => ({ token: r.token, character: r.data && r.kind && !r.deletedAt ? { data: r.data, kind: r.kind } : null }));
+  }
+
+  /** One token as a DTO (with linked character vitals). */
+  async tokenDto(tokenId: string): Promise<TokenDto | null> {
+    const [r] = await this.db
+      .select({ token: tokens, data: characters.data, kind: characters.kind, deletedAt: characters.deletedAt })
+      .from(tokens)
+      .leftJoin(characters, eq(characters.id, tokens.characterId))
+      .where(eq(tokens.id, tokenId));
+    if (!r) return null;
+    return toTokenDto(r.token, r.data && r.kind && !r.deletedAt ? { data: r.data, kind: r.kind } : null);
+  }
+
+  /** Tokens (with scene) linked to a character, for re-broadcasting after sheet edits. */
+  async tokenScenes(ids: string[]): Promise<Array<{ id: string; sceneId: string }>> {
+    if (!ids.length) return [];
+    return this.db.select({ id: tokens.id, sceneId: tokens.sceneId }).from(tokens).where(inArray(tokens.id, ids));
+  }
+
+  async tokensForCharacter(characterId: string): Promise<Array<{ id: string; sceneId: string; campaignId: string }>> {
+    return this.db.select({ id: tokens.id, sceneId: tokens.sceneId, campaignId: tokens.campaignId }).from(tokens).where(eq(tokens.characterId, characterId));
   }
 
   /** Everything one viewer is allowed to know about a scene. */
@@ -332,7 +405,10 @@ export class SceneService {
     const row = await this.viewable(m, sceneId);
     const [{ state, ops }, rows] = await Promise.all([this.fogState(row), this.tokenRows(row.id)]);
     const viewer = viewerOf(m);
-    const visible = rows.map((r) => toTokenDto(r.token, r.portraitUrl)).filter((t) => canSeeToken(t, viewer, state));
+    const visible = rows
+      .map((r) => toTokenDto(r.token, r.character))
+      .filter((t) => canSeeToken(t, viewer, state))
+      .map((t) => redactToken(t, viewer));
     return { scene: toSceneDto(row, m.campaign.activeSceneId, m.caps.has("dmNotes.view")), tokens: visible, fog: ops };
   }
 
@@ -390,13 +466,18 @@ export class SceneService {
 
     let name = input.name;
     let color = input.color;
-    let portraitUrl: string | null = null;
+    let linked: LinkedCharacter | null = null;
     if (input.characterId) {
-      const [c] = await this.db.select({ name: characters.name, data: characters.data }).from(characters).where(eq(characters.id, input.characterId));
+      const [c] = await this.db
+        .select({ name: characters.name, data: characters.data, kind: characters.kind })
+        .from(characters)
+        .where(eq(characters.id, input.characterId));
       name ||= c?.name;
       color ||= c?.data.color;
-      portraitUrl = c?.data.portraitUrl || null;
+      if (c) linked = { data: c.data, kind: c.kind };
     }
+    // Party members' HP is public by default; monsters/NPCs stay GM-only unless the DM opens them up.
+    const hpVis: HpVisibility = input.hpVisibility ?? (linked?.kind === "pc" ? "everyone" : "gm");
     const [row] = await this.db
       .insert(tokens)
       .values({
@@ -417,9 +498,11 @@ export class SceneService {
         locked: input.locked ?? false,
         showName: input.showName ?? true,
         ownerIds: [...new Set(input.ownerIds ?? [])],
+        hpVisibility: hpVis,
+        stats: input.stats ?? null,
       })
       .returning();
-    return toTokenDto(row!, portraitUrl);
+    return redactToken(toTokenDto(row!, linked), viewerOf(m));
   }
 
   /**
@@ -446,13 +529,7 @@ export class SceneService {
       .set({ ...values, version: sql`${tokens.version} + 1`, updatedAt: new Date() })
       .where(eq(tokens.id, tokenId))
       .returning();
-    const portrait = row!.characterId ? await this.portraitFor(row!.characterId) : null;
-    return toTokenDto(row!, portrait);
-  }
-
-  private async portraitFor(characterId: string): Promise<string | null> {
-    const [c] = await this.db.select({ data: characters.data }).from(characters).where(eq(characters.id, characterId));
-    return c?.data.portraitUrl || null;
+    return redactToken((await this.tokenDto(row!.id))!, viewer);
   }
 
   async deleteToken(m: Membership, sceneId: string, tokenId: string): Promise<TokenDto> {

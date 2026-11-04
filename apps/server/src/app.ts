@@ -22,6 +22,7 @@ import { AssetService, MAX_UPLOAD_BYTES } from "./assets/service.js";
 import { LocalDiskStorage, type Storage } from "./assets/storage.js";
 import { assetRoutes } from "./assets/routes.js";
 import { SceneService } from "./scenes/service.js";
+import { CombatService } from "./combat/service.js";
 import { sceneRoutes } from "./scenes/routes.js";
 
 export async function buildApp(
@@ -38,15 +39,17 @@ export async function buildApp(
   const auth = new AuthService(db, { sessionTtlDays: config.SESSION_TTL_DAYS, guestTtlDays: config.GUEST_TTL_DAYS });
   const campaigns = new CampaignService(db);
   const assets = new AssetService(db, opts.storage ?? new LocalDiskStorage(path.resolve(config.UPLOAD_DIR)), campaigns);
+  const chat = new ChatService(db, campaigns, () => ctx.realtime);
   const ctx: AppContext = {
     config,
     db,
     auth,
     campaigns,
     characters: new CharacterService(db, campaigns),
-    chat: new ChatService(db, campaigns, () => ctx.realtime),
+    chat,
     assets,
     scenes: new SceneService(db, campaigns, assets),
+    combat: new CombatService(db, chat),
   };
   app.decorate("ctx", ctx);
   app.decorateRequest("auth", null);

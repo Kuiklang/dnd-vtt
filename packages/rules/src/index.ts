@@ -12,3 +12,5 @@ export * from "./visibility.js";
 export * from "./map/geometry.js";
 export * from "./map/fog.js";
 export * from "./map/tokens.js";
+export * from "./combat/damage.js";
+export * from "./combat/tracker.js";

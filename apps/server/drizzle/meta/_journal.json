@@ -15,6 +15,13 @@
       "when": 1793787557105,
       "tag": "0001_phase2_maps",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793788952348,
+      "tag": "0002_phase4_combat",
+      "breakpoints": true
     }
   ]
 }
