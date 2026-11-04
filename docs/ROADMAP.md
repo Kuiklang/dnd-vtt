@@ -7,8 +7,8 @@ MVP = สิ่งที่กลุ่มหนึ่งใช้เล่น�
 1. ✅ บัญชี + guest, สร้างแคมเปญ, เชิญผู้เล่นด้วย link/code, roles
 2. ✅ Character sheet 5e ที่คำนวณถูกต้อง + ทอยจาก sheet
 3. ✅ Lobby realtime: presence, chat, dice (public/private/whisper/blind/DM-only)
-4. ⏳ Map canvas + upload map + grid + token (ลาก/วาง sync ทุกคน) — **Phase 2**
-5. ⏳ Manual Fog of War — **Phase 2**
+4. ✅ Map canvas + upload map + grid + token (ลาก/วาง sync ทุกคน) — **Phase 2**
+5. ✅ Manual Fog of War — **Phase 2**
 6. ⏳ Initiative tracker + HP/damage/conditions บน token — **Phase 4** (ดึงมาก่อนส่วนอื่นของ Phase 3 ได้)
 
 เมื่อครบ 1–6 ถือว่า MVP พร้อมทดลองเล่นจริง (alpha)
@@ -18,9 +18,9 @@ MVP = สิ่งที่กลุ่มหนึ่งใช้เล่น�
 | Phase | เนื้อหา | สถานะ |
 | --- | --- | --- |
 | 1 Foundation | project setup, auth, campaign, lobby, DB, basic UI, roles, character system | ✅ เสร็จ (ดูรายละเอียดด้านล่าง) |
-| 2 Core VTT | map canvas (PixiJS), upload map (asset storage), token + placement, grid (square/hex), manual fog, multiplayer state sync, save system | ⏭ ถัดไป |
+| 2 Core VTT | map canvas (Konva), upload map (asset storage), token + placement, grid (square/hex), manual fog, multiplayer state sync, save system | ✅ เสร็จ (ดู PROJECT_PLAN.md) |
 | 3 Character & Dice | character creator wizard, 3D/2D dice animation + sound, character import (PDF/image → OCR/AI → review), token linking, ability checks จาก token | |
-| 4 Combat | combat mode, initiative tracker, turn/round, HP/damage (resistance/vulnerability/immunity), healing, conditions + duration, combat HUD, action economy | |
+| 4 Combat (ถัดไป — ดึงมาก่อน Phase 3 เพื่อปิด MVP) | combat mode, initiative tracker, turn/round, HP/damage (resistance/vulnerability/immunity), healing, conditions + duration, combat HUD, action economy | |
 | 5 DM Toolkit | NPC/Monster library (SRD), encounter builder, journal (Markdown), handouts, DM Screen (panels), random tables, custom rulesets UI | |
 | 6 Music | audio upload, playlists, ambient layers, realtime sync (DM controls, player local volume) | |
 | 7 Advanced | spell library + casting + AoE templates, inventory transfer, measurement, scene templates & switching, undo/redo, session recap, timeline | |
@@ -56,3 +56,7 @@ MVP = สิ่งที่กลุ่มหนึ่งใช้เล่น�
 5. Manual fog (rect/circle/polygon reveal/hide) — ผู้เล่นได้รับเฉพาะส่วนที่เปิดแล้ว
 6. Autosave + save status สำหรับ map, reconnect state recovery
 7. Integration/E2E: วางแผนที่, วาง token, sync 2 client, reconnect ไม่ทำให้ token หาย
+
+## Phase 2 — สิ่งที่ส่งมอบ (2026-11-04)
+
+ดูรายละเอียดและสถานะจริงใน [PROJECT_PLAN.md](../PROJECT_PLAN.md) และ [TODO.md](../TODO.md)

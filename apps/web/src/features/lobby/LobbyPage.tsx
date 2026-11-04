@@ -13,6 +13,7 @@ import { DiceTray } from "./DiceTray";
 import { InvitePanel } from "./InvitePanel";
 import { CampaignSettingsModal } from "./CampaignSettingsModal";
 import { CharacterSheetLoader } from "../character/CharacterSheetLoader";
+import { useT } from "../../i18n";
 
 export function LobbyPage() {
   const { id = "" } = useParams();
@@ -194,14 +195,25 @@ function LobbyHeader({ lobby, detail, caps, onSettings }: { lobby: Lobby; detail
             )}
           </>
         )}
+        <EnterTableButton campaignId={detail.campaign.id} />
         {caps.has("campaign.edit") && <Button onClick={onSettings}>Settings</Button>}
       </div>
       {s?.status === "active" && (
         <p className="w-full rounded-md bg-ink-900/70 px-3 py-2 text-xs text-parchment-400">
-          The session is live: chat and dice are synced for everyone. The map, tokens and combat table are being built in Phase 2 and are not available yet.
+          The session is live: chat, dice, the map and tokens are synced for everyone. Combat tracking (initiative, HP on tokens) arrives in Phase 4.
         </p>
       )}
     </div>
+  );
+}
+
+function EnterTableButton({ campaignId }: { campaignId: string }) {
+  const t = useT();
+  const navigate = useNavigate();
+  return (
+    <Button variant="primary" onClick={() => navigate(`/campaigns/${campaignId}/table`)} data-testid="enter-table">
+      🗺 {t("lobby.enterTable")}
+    </Button>
   );
 }
 

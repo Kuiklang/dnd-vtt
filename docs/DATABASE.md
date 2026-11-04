@@ -28,6 +28,21 @@ PostgreSQL + Drizzle ORM. Schema: `apps/server/src/db/schema.ts`, migrations: `a
 
 Enums: `campaign_role`, `campaign_privacy`, `character_kind`, `chat_channel`, `roll_visibility`, `game_session_status`
 
+## Phase 2 tables (implemented — migration `0001_phase2_maps.sql`)
+
+| Table | หน้าที่ | Key points |
+| --- | --- | --- |
+| `assets` | ไฟล์ที่อัปโหลด (map/token/portrait…) | `campaign_id` null = ไฟล์ส่วนตัว; `mime` (จาก magic bytes), `width/height`, `size_bytes`, `sha256`, `storage_key`, soft delete |
+| `scenes` | แผนที่ / ฉาก | `background_asset_id` → assets, `width/height` px, `grid` JSONB (`GridSettings`), `fog_enabled`, `dm_notes`, `sort_order`, `version`, soft delete |
+| `tokens` | token บนแผนที่ | `scene_id` + `campaign_id` (tenant), `character_id` (nullable), x/y (double), `size` (cells), `rotation`, `layer` enum, `shape` enum, สี, `hidden`, `locked`, `show_name`, `owner_ids uuid[]`, `version` |
+| `fog_ops` | รูปหมอกตามลำดับ | `mode` (reveal/hide), `shape` JSONB (rect/circle/polygon), `seq` identity = ลำดับการ apply |
+
+`campaigns.active_scene_id` = scene ที่ผู้เล่นเห็น (ไม่ใส่ FK เพื่อเลี่ยง cycle campaigns↔scenes; ตรวจใน service และ set null เมื่อ scene ถูกลบ)
+
+Enums ใหม่: `asset_kind`, `token_layer`, `token_shape`, `fog_mode`
+
+ข้อจำกัดที่บังคับใน service: ≤200 scenes/แคมเปญ, ≤500 tokens/scene, ≤2000 fog shapes/scene, scene 100–16384 px
+
 ### Integrity rules ที่บังคับใน DB
 
 - ลบ user → cascade sessions/characters/memberships; ลบ campaign (hard) → cascade ทุกอย่างในแคมเปญ
@@ -42,10 +57,7 @@ Enums: `campaign_role`, `campaign_privacy`, `character_kind`, `chat_channel`, `r
 
 | Entity | Phase | หมายเหตุ |
 | --- | --- | --- |
-| `assets` | 2 | ไฟล์ใน object storage (S3-compatible): owner, campaign, mime, size, sha256, status (scan) |
-| `maps`, `map_layers`, `map_objects` | 2 | layer มี order/opacity/visibility; object มี geometry JSONB + layer_id |
-| `tokens` | 2 | map_id, character_id (nullable), owner/controller, x/y/rotation/size, hidden, locked, appearance JSONB |
-| `fog_regions` | 2 | polygon JSONB ต่อ map (reveal/hide) — **ไม่ส่งให้ client ที่ไม่มีสิทธิ์** |
+| `map_layers` (custom), `map_objects`, `drawings` | 7 | ตอนนี้ layer เป็น enum บน token (map/objects/tokens/dm); custom layer + drawing tools มาภายหลัง |
 | `scenes`, `scene_templates` | 7 | snapshot ของ map+tokens+music+notes; template export/import JSON พร้อม schemaVersion |
 | `combats`, `combatants` | 4 | round/turn index, initiative, action economy JSONB, concentration |
 | `undo_history` | 7 | append-only operation log ต่อ entity type (command pattern: do/undo payload) |

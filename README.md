@@ -5,7 +5,9 @@
 แพลตฟอร์ม Virtual Tabletop สำหรับ Dungeons & Dragons ที่รวมเครื่องมือของ DM และผู้เล่นไว้ในเว็บเดียว
 (ชื่อ "Arcane Table" เป็นชื่อชั่วคราว เปลี่ยนได้ภายหลัง)
 
-## สถานะปัจจุบัน: Phase 1 — Foundation ✅
+## สถานะปัจจุบัน: Phase 1 ✅ · Phase 2 (Core VTT) ✅
+
+ความคืบหน้าละเอียด: [PROJECT_PLAN.md](PROJECT_PLAN.md) · งานที่เหลือ: [TODO.md](TODO.md)
 
 | ระบบ | สถานะ |
 | --- | --- |
@@ -20,12 +22,17 @@
 | Character: library, sheet ครบ, คำนวณอัตโนมัติ, overrides, autosave, optimistic locking, duplicate, JSON import/export | ✅ |
 | Google login | ⏳ ยังไม่ทำ (ต้องมี OAuth credentials) — UI แจ้งชัดเจน |
 | Character import จาก PDF/รูป (OCR/AI) | ⏳ Phase 3 |
-| Map / Token / Fog / Combat / Music / DM Toolkit | ⏳ Phase 2–8 (ดู [docs/ROADMAP.md](docs/ROADMAP.md)) |
+| อัปโหลดรูป (map/token) — ตรวจชนิดไฟล์จริง, จำกัดขนาด, เสิร์ฟเฉพาะสมาชิก | ✅ |
+| แผนที่: grid square/hex/none, pan/zoom, หลายแผนที่ + active scene, ทำสำเนา, DM notes | ✅ Konva |
+| Token: วาง/ลาก/snap, ซ่อน/ล็อก/layer/ผู้ควบคุม, sync realtime ต่อผู้รับ | ✅ |
+| Fog of War แบบ manual (rect/circle/polygon, กรอง token ที่ server) + วัดระยะตาม ruleset | ✅ |
+| UI ไทย / อังกฤษ | ✅ framework + หน้าโต๊ะ, หน้าอื่นกำลังแปล |
+| Combat / Music / DM Toolkit / Dynamic lighting | ⏳ Phase 3–8 (ดู [docs/ROADMAP.md](docs/ROADMAP.md)) |
 
 ## Tech stack
 
 - **Monorepo** (pnpm workspaces): `packages/rules`, `apps/server`, `apps/web`
-- **Frontend:** React 19 + TypeScript + Vite + Tailwind CSS v4 + Zustand + React Router
+- **Frontend:** React 19 + TypeScript + Vite + Tailwind CSS v4 + Zustand + React Router + react-konva
 - **Backend:** Node 22 + Fastify 5 + Socket.IO 4 + Zod
 - **Database:** PostgreSQL 16 + Drizzle ORM (SQL migrations ใน `apps/server/drizzle`)
 - **Tests:** Vitest (unit + integration กับ Postgres จริง) + Playwright E2E
@@ -52,16 +59,19 @@ cd apps/server
 WEB_DIST=../web/dist WEB_ORIGIN=https://your.domain COOKIE_SECURE=true NODE_ENV=production pnpm start
 ```
 
+ไฟล์ที่อัปโหลดเก็บที่ `UPLOAD_DIR` (ค่าเริ่มต้น `apps/server/data/uploads`)
+
 server จะรัน migration อัตโนมัติตอนเริ่ม และเสิร์ฟหน้าเว็บ + API + WebSocket จาก origin เดียวกัน
 
 ## การทดสอบ
 
 ```bash
-pnpm test           # rules (96) + server integration (31, ต้องมี DB vtt_test) + web (3)
+pnpm test           # rules (115) + server integration (40, ต้องมี DB vtt_test) + web (6)
 pnpm typecheck
 
 # E2E (DM + ผู้เล่น 2 browser context): build web, รัน server ตามด้านบนที่พอร์ต 3001 แล้ว
 BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase1.e2e.cjs
+BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase2.e2e.cjs   # map/token/fog, DM + ผู้เล่น
 ```
 
 `TEST_DATABASE_URL` ใช้กำหนด DB สำหรับ integration test (ค่าเริ่มต้น `postgres://postgres@localhost:5432/vtt_test` — **ถูกล้างทุกครั้งที่รัน**)

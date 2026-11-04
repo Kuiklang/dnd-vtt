@@ -48,7 +48,11 @@ packages/rules/src
 │   ├── schema.ts          Zod schema of character data (versioned), migrateCharacterData(), export envelope
 │   └── derive.ts          deriveCharacter() → modifiers, saves, skills, passive, DC, attacks, hit dice…; applyHpChange()
 ├── permissions.ts         roles → capabilities, per-campaign overrides, role hierarchy
-└── visibility.ts          who sees which roll / chat message
+├── visibility.ts          who sees which roll / chat message
+└── map/
+    ├── geometry.ts        grid settings (square/hex/none), snapToGrid, cellAt, cellDistance/pathDistance (ruleset diagonal rule)
+    ├── fog.ts             manual fog model (ordered reveal/hide shapes), isPointRevealed, normalizeShape
+    └── tokens.ts          TokenState, canSeeToken (hidden / DM layer / fog / ownership), canControlToken
 
 apps/server/src
 ├── app.ts                 Fastify setup, security headers, Origin check, error handler, static SPA
@@ -60,17 +64,23 @@ apps/server/src
 ├── campaigns/             service.ts (membership, invites, roles, sessions), routes.ts
 ├── characters/            service.ts (access rules, optimistic locking, import/export), routes.ts
 ├── chat/                  service.ts (chat + dice persistence & filtering), routes.ts (history + REST mirror)
-└── realtime/socket.ts     Socket.IO: auth, presence, rate limit, per-recipient broadcasts
+├── assets/                storage.ts (Storage interface + LocalDiskStorage), service.ts (magic-byte sniffing, limits, access), routes.ts
+├── scenes/                service.ts (scenes, tokens, fog, per-viewer state), routes.ts (scene REST + Zod schemas)
+└── realtime/socket.ts     Socket.IO: auth, presence, rate limit, per-recipient broadcasts, scene rooms
 
 apps/web/src
-├── App.tsx                routes + auth guard + top bar
+├── App.tsx                routes + auth guard + top bar + language switch (TablePage is lazy-loaded)
+├── i18n/                  en.ts (keys), th.ts, translate()/useT()/useLang (localStorage)
 ├── lib/                   api client, socket client, shared types, useAsync
 ├── stores/                auth, toast (Zustand)
 ├── components/            ui primitives (Button, Card, Modal…), Avatar
 ├── pages/                 Auth, Dashboard, CreateCampaign, Join, Profile
 └── features/
     ├── lobby/             LobbyPage, useLobby (socket state), Feed (chat+dice), DiceTray, RollCard, InvitePanel, settings
-    └── character/         CharacterPage, CharacterSheet (+ sections), CharacterSheetLoader (autosave/conflicts)
+    ├── character/         CharacterPage, CharacterSheet (+ sections), CharacterSheetLoader (autosave/conflicts)
+    └── table/             TablePage (layout, tools, shortcuts), useTable (scene socket state, optimistic tokens),
+                           ScenePanel (maps + grid settings), TokenPanel (add/edit tokens),
+                           canvas/MapCanvas (Konva stage: pan/zoom, grid, tokens, fog, ruler), TokenNode, draw.ts
 ```
 
 กฎ: business logic อยู่ใน service / rules package, routes ทำแค่ validate + เรียก service, component ใหญ่ถูกแยกเป็น section
@@ -87,7 +97,19 @@ apps/web/src
 - ตรวจ membership จาก DB ทุก event → เปลี่ยน role / kick มีผลทันที
 - Presence เก็บใน memory: disconnect ไม่ตั้งใจ → `reconnecting` 10 วินาที แล้วจึง `offline` (ready state คงไว้ถ้ากลับมาทัน)
 - Reconnect: client ส่ง `campaign:join` ใหม่ได้ snapshot (presence + history) แล้ว merge ตาม id จึงไม่มีข้อความซ้ำ
-- Rate limit ต่อ socket (token bucket 30 burst / 5 ต่อวินาที)
+- Rate limit ต่อ socket (token bucket 60 burst / 15 ต่อวินาที)
+
+### Scene (map) realtime — Phase 2
+
+- ห้อง `scene:{id}`: client ส่ง `scene:join` ได้ state ที่กรองแล้วสำหรับตัวเอง (scene + tokens + fog ops)
+  ผู้เล่นเข้าได้เฉพาะ active scene ของแคมเปญ; GM เปิดได้ทุก scene
+- Client → server: `scene:join|leave`, `token:create|update|delete`, `fog:add|reset|undo|enable`
+- Server → client: `token:upsert` / `token:remove` (คำนวณ**ต่อผู้รับ** ด้วย `canSeeToken` — token ที่ซ่อนหรืออยู่ในหมอกจะถูกส่ง
+  เป็น `token:remove` ให้ผู้เล่นแทน), `scene:state` (หลังเปลี่ยนหมอก/ตั้งค่า), `scenes:changed`, `scene:activated`, `scene:deleted`
+- เปลี่ยน active scene → socket ของผู้เล่นถูกเอาออกจากห้อง scene เก่า (ไม่ได้รับ update ของแผนที่ที่ตัวเองมองไม่เห็นอีก)
+- Token move: optimistic บน client → server validate (สิทธิ์ + field ที่ owner แก้ได้คือ x/y/rotation) → บันทึก DB ทันที
+  → broadcast พร้อม `version` เพิ่มขึ้น; client ทิ้ง broadcast ที่ version เก่ากว่า; ถ้า server ปฏิเสธ client rollback
+- Reconnect: `useTable` join scene ใหม่ทุกครั้งที่ socket กลับมา → state ล่าสุดจาก DB ไม่ซ้ำ ไม่หาย
 
 **Scale-out (อนาคต):** presence และ room อยู่ใน process เดียว เมื่อรันหลาย instance ให้ใช้ `@socket.io/redis-adapter` +
 ย้าย presence ไป Redis (ดู RISKS.md)
@@ -103,6 +125,8 @@ apps/web/src
 | Input validation | Zod ทุก route/socket event, strip control chars, จำกัดความยาว, body limit |
 | Dice parser | hand-written parser, จำกัดความยาว/จำนวนลูก/หน้า/ความลึก/explode, ไม่มี `eval` |
 | XSS | React escape ทุกข้อความ, ไม่มี `dangerouslySetInnerHTML`, CSP header, URL รูปต้องเป็น `https://` |
+| File upload | ตรวจชนิดจาก magic bytes (PNG/JPEG/WEBP/GIF เท่านั้น, ไม่รับ SVG), จำกัดขนาดต่อชนิด + ขนาดภาพ ≤16384px, storage key สร้างโดย server, เสิร์ฟพร้อม `nosniff` + ตรวจสมาชิกแคมเปญ (ตอบ 404) |
+| Map secrets | token ที่ซ่อน / layer DM / อยู่ในหมอก ไม่ถูกส่งให้ผู้เล่น, `dmNotes` ส่งเฉพาะผู้มี `dmNotes.view`, scene ที่ไม่ active ผู้เล่นเปิดไม่ได้ |
 | SQL injection | Drizzle parameterised queries ทั้งหมด |
 | Rate limiting | `@fastify/rate-limit` 300/นาที global, 10/นาที สำหรับ auth, socket token bucket |
 | DM-only data | กรองที่ SQL + payload ต่อผู้รับ, character access level (owner/edit/view/summary) |

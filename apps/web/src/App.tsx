@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { Suspense, lazy, useEffect, type ReactNode } from "react";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "./stores/auth";
 import { Button, Loading, Toaster } from "./components/ui";
@@ -9,6 +9,9 @@ import { JoinPage } from "./pages/JoinPage";
 import { LobbyPage } from "./features/lobby/LobbyPage";
 import { CharacterPage } from "./features/character/CharacterPage";
 import { ProfilePage } from "./pages/ProfilePage";
+// The table pulls in the canvas engine; load it only when a player opens the map.
+const TablePage = lazy(() => import("./features/table/TablePage").then((m) => ({ default: m.TablePage })));
+import { LANGS, useLang, useT } from "./i18n";
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, status } = useAuth();
@@ -18,9 +21,30 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function LanguageSwitch() {
+  const { lang, setLang } = useLang();
+  const t = useT();
+  return (
+    <select
+      aria-label={t("lang.label")}
+      value={lang}
+      onChange={(e) => setLang(e.target.value as typeof lang)}
+      className="h-8 rounded border border-ink-700 bg-ink-900 px-1 text-xs text-parchment-200"
+      data-testid="lang-switch"
+    >
+      {LANGS.map((l) => (
+        <option key={l.id} value={l.id}>
+          {l.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function TopBar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const t = useT();
   return (
     <header className="sticky top-0 z-30 border-b border-ink-700/80 bg-ink-950/85 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4">
@@ -33,7 +57,7 @@ function TopBar() {
         {user && (
           <nav className="flex items-center gap-1 text-sm">
             <Link to="/" className="hidden rounded px-3 py-1.5 hover:bg-ink-800 sm:inline">
-              Campaigns
+              {t("nav.campaigns")}
             </Link>
             <Link to="/profile" className="flex items-center gap-2 rounded px-3 py-1.5 hover:bg-ink-800">
               {user.avatarUrl ? (
@@ -42,7 +66,7 @@ function TopBar() {
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ink-700 text-xs">{user.displayName[0]?.toUpperCase()}</span>
               )}
               <span className="hidden max-w-40 truncate sm:inline">{user.displayName}</span>
-              {user.isGuest && <span className="hidden text-xs text-parchment-500 sm:inline">(guest)</span>}
+              {user.isGuest && <span className="hidden text-xs text-parchment-500 sm:inline">{t("nav.guest")}</span>}
             </Link>
             <Button
               variant="ghost"
@@ -52,10 +76,12 @@ function TopBar() {
                 navigate("/login");
               }}
             >
-              Log out
+              {t("nav.logout")}
             </Button>
+            <LanguageSwitch />
           </nav>
         )}
+        {!user && <LanguageSwitch />}
       </div>
     </header>
   );
@@ -78,6 +104,7 @@ export function App() {
             <Route path="/" element={<RequireAuth><DashboardPage /></RequireAuth>} />
             <Route path="/campaigns/new" element={<RequireAuth><CreateCampaignPage /></RequireAuth>} />
             <Route path="/campaigns/:id" element={<RequireAuth><LobbyPage /></RequireAuth>} />
+            <Route path="/campaigns/:id/table" element={<RequireAuth><Suspense fallback={<Loading />}><TablePage /></Suspense></RequireAuth>} />
             <Route path="/characters/:id" element={<RequireAuth><CharacterPage /></RequireAuth>} />
             <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
             <Route path="*" element={<div className="p-10 text-center text-parchment-400">Page not found. <Link className="text-gold-400 underline" to="/">Go home</Link></div>} />

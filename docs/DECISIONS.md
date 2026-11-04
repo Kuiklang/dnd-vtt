@@ -27,3 +27,16 @@
 15. **Party members เห็น summary ของ PC คนอื่น** (ชื่อ, class/level, portrait) ไม่เห็น sheet เต็ม; DM เห็นและแก้ได้
 16. **ชื่อชั่วคราว "Arcane Table"**, ธีม dark fantasy (ทอง/หมึก/เลือด), ฟอนต์ Cinzel + Inter
 17. **รูปภาพใน Phase 1 เป็น https URL** จนกว่า asset storage จะมา (Phase 2) — กัน mixed content / javascript: URL
+18. **Konva (Canvas2D) แทน PixiJS** — ผู้ใช้อนุมัติ (2026-11-04). เขียนกับ React ได้ตรง (react-konva), hit-testing/drag ในตัว,
+    พอสำหรับ token หลักร้อย; Dynamic lighting หนักๆ (Phase 8) ค่อยแยกเป็น layer WebGL
+19. **Scene = Map** ในตอนนี้ — ตาราง `scenes` เก็บแผนที่ + grid + fog + token; Scene Template (Phase 7) จะเป็น snapshot JSON ของ scene
+20. **Active scene ต่อแคมเปญ** (`campaigns.active_scene_id`) — ผู้เล่นเห็นได้ทีละ scene; DM เปิดดู/เตรียม scene อื่นได้โดยผู้เล่นไม่เห็น;
+    scene แรกที่สร้างกลายเป็น active อัตโนมัติ
+21. **Manual fog = รายการรูปทรงเรียงลำดับ** (เปิดทั้งแผนที่เป็นหมอกเมื่อ enable; reveal/hide ทับกัน, อันหลังชนะ) — คำนวณได้ทั้ง client/server
+    ด้วยโค้ดเดียวกัน, undo ได้ทีละรูป; Phase 8 vision จะ OR กับ layer นี้
+22. **ผู้เล่นวาง token ได้เฉพาะตัวละครของตัวเอง** (1 ตัวต่อ scene) และแก้ได้แค่ตำแหน่ง/การหมุนของ token ที่ตนควบคุมและไม่ถูกล็อก
+23. **ผู้เล่นเห็นหมอก "ใต้" token** — server ส่งเฉพาะ token ที่ผู้เล่นมีสิทธิ์เห็น จึงวาดหมอกใต้ token layer ได้ (token ของตัวเองไม่ถูกหมอกบัง); DM เห็นหมอกโปร่งแสงทับทุกอย่าง
+24. **Local disk storage ผ่าน `Storage` interface** — dev/single-server; S3/R2 เพิ่มได้โดยไม่แก้ service (ผู้ใช้อนุมัติ)
+25. **i18n เขียนเอง (ไม่มี dependency)** — `en.ts` เป็นต้นแบบ key (type-safe), `th.ts` ต้องครบทุก key (มี unit test), ภาษาเก็บใน localStorage,
+    ค่าเริ่มต้นตามภาษาของ browser; ศัพท์เกม (AC, HP, DM, Token) คงเป็นอังกฤษ
+26. **ยังใช้ Drizzle** (ไม่เปลี่ยนเป็น Prisma ตามแผนเดิม) — รอผู้ใช้ยืนยัน; เหตุผลดูข้อ 2
