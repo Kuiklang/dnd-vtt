@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { Server, type Socket } from "socket.io";
 import { z } from "zod";
-import { CHAT_CHANNELS, FOG_SHAPES, ROLL_VISIBILITIES, canSeeChatMessage, canSeeToken, type CampaignRole, type FogShape } from "@vtt/rules";
+import { CHAT_CHANNELS, FOG_SHAPES, ROLL_VISIBILITIES, canSeeChatMessage, canSeeToken, type CampaignRole, type Capability, type FogShape } from "@vtt/rules";
 import { tokenConditionSchema, tokenFields } from "../scenes/routes.js";
 import type { CombatEffects } from "../combat/service.js";
 import { redactToken, toSceneDto, toTokenDto } from "../scenes/service.js";
@@ -9,6 +9,8 @@ import { SESSION_COOKIE, type AppContext } from "../context.js";
 import { HttpError } from "../lib/errors.js";
 import { rollForViewer, viewerFor, type ChatMessageDto, type RollDto } from "../chat/service.js";
 import { cleanText } from "../lib/validation.js";
+import { canSeeJournal, toJournalDto } from "../dmtools/service.js";
+import type { JournalRow } from "../db/schema.js";
 
 export type PresenceStatus = "online" | "reconnecting" | "offline";
 
@@ -431,6 +433,40 @@ export class Realtime {
       const payload = build(userId, role);
       if (payload !== null) sock.emit(event, payload);
     }
+  }
+
+  /** Like `tailored`, but builds each payload from the member's effective capabilities. */
+  private async tailoredCaps(campaignId: string, build: (userId: string, caps: Set<Capability>) => Array<[string, unknown]>) {
+    const [sockets, caps] = await Promise.all([this.io.in(room(campaignId)).fetchSockets(), this.ctx.campaigns.memberCaps(campaignId)]);
+    for (const sock of sockets) {
+      const userId = (sock.data as SocketData).userId;
+      const c = caps.get(userId);
+      if (!c) continue;
+      for (const [event, payload] of build(userId, c)) sock.emit(event, payload);
+    }
+  }
+
+  /**
+   * Journal change: viewers who can read the new version get it; viewers who could read
+   * the old one but not the new one get a removal. Nobody else hears about the entry.
+   */
+  journalChanged(campaignId: string, before: JournalRow | null, after: JournalRow | null) {
+    void this.tailoredCaps(campaignId, (userId, caps) => {
+      const v = { userId, manager: caps.has("journal.manage") };
+      if (after && canSeeJournal(after, v)) return [["journal:upsert", { campaignId, entry: toJournalDto(after, v) }]];
+      if (before && canSeeJournal(before, v)) return [["journal:remove", { campaignId, id: before.id }]];
+      return [];
+    }).catch((err) => this.app.log.error({ err }, "journalChanged failed"));
+  }
+
+  /** Pops a handout up on the chosen members' screens (only those who can read it). */
+  handoutShown(campaignId: string, entry: JournalRow, recipients: "all" | string[], senderId: string) {
+    void this.tailoredCaps(campaignId, (userId, caps) => {
+      const v = { userId, manager: caps.has("journal.manage") };
+      if (userId === senderId || !canSeeJournal(entry, v)) return [];
+      if (recipients !== "all" && !recipients.includes(userId)) return [];
+      return [["handout:show", { campaignId, entry: toJournalDto(entry, v) }]];
+    }).catch((err) => this.app.log.error({ err }, "handoutShown failed"));
   }
 
   broadcastChat(msg: ChatMessageDto) {

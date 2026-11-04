@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { imageSize } from "image-size";
 import type { Db } from "../db/client.js";
-import { assets, type AssetRow, type User } from "../db/schema.js";
+import { assets, journalEntries, type AssetRow, type User } from "../db/schema.js";
 import { badRequest, forbidden, notFound } from "../lib/errors.js";
 import type { CampaignService } from "../campaigns/service.js";
 import type { Storage } from "./storage.js";
@@ -137,9 +137,27 @@ export class AssetService {
   async readable(id: string, userId: string): Promise<AssetRow> {
     const row = await this.row(id);
     if (row.campaignId) {
-      await this.campaigns.membership(row.campaignId, userId).catch(() => {
+      const m = await this.campaigns.membership(row.campaignId, userId).catch(() => {
         throw notFound("File");
       });
+      // Handout images stay private until a journal entry the viewer can read uses them.
+      if (row.kind === "handout" && row.ownerId !== userId && !m.caps.has("journal.manage")) {
+        const [shared] = await this.db
+          .select({ id: journalEntries.id })
+          .from(journalEntries)
+          .where(
+            and(
+              eq(journalEntries.imageAssetId, row.id),
+              or(
+                eq(journalEntries.visibility, "all"),
+                and(eq(journalEntries.visibility, "selected"), sql`${userId}::uuid = any(${journalEntries.sharedWith})`),
+                and(eq(journalEntries.visibility, "author"), eq(journalEntries.authorId, userId)),
+              ),
+            ),
+          )
+          .limit(1);
+        if (!shared) throw notFound("File");
+      }
     }
     return row;
   }
@@ -154,9 +172,10 @@ export class AssetService {
   }
 
   async list(campaignId: string, userId: string, kind?: AssetKind): Promise<AssetRow[]> {
-    await this.campaigns.membership(campaignId, userId);
+    const m = await this.campaigns.membership(campaignId, userId);
     const where = [eq(assets.campaignId, campaignId), isNull(assets.deletedAt)];
     if (kind) where.push(eq(assets.kind, kind));
+    if (!m.caps.has("journal.manage")) where.push(or(ne(assets.kind, "handout"), eq(assets.ownerId, userId))!);
     return this.db.select().from(assets).where(and(...where)).orderBy(assets.createdAt);
   }
 

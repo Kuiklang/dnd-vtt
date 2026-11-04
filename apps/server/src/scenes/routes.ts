@@ -49,6 +49,7 @@ export const tokenStatsSchema = z.object({
   initiativeBonus: int(-20, 50),
   conditions: z.array(tokenConditionSchema).max(30),
   defenses: defensesSchema,
+  statBlock: z.object({ type: z.enum(["srd", "character"]), id: cleanText(80).pipe(z.string().min(1)) }).nullable().optional(),
 });
 export const tokenFields = z.object({
   characterId: z.uuid().nullable(),

@@ -9,6 +9,7 @@ import type { Realtime } from "./realtime/socket.js";
 import type { AssetService } from "./assets/service.js";
 import type { SceneService } from "./scenes/service.js";
 import type { CombatService } from "./combat/service.js";
+import type { DmToolsService } from "./dmtools/service.js";
 
 export interface AppContext {
   config: Config;
@@ -20,6 +21,7 @@ export interface AppContext {
   assets: AssetService;
   scenes: SceneService;
   combat: CombatService;
+  dmTools: DmToolsService;
   /** Set once Socket.IO is attached; services use it to broadcast REST-originated changes. */
   realtime?: Realtime;
 }

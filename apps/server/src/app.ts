@@ -26,6 +26,8 @@ import { CombatService } from "./combat/service.js";
 import { extractorFromConfig, type SheetExtractor } from "./import/extractor.js";
 import { sheetImportRoutes } from "./import/routes.js";
 import { sceneRoutes } from "./scenes/routes.js";
+import { dmToolRoutes } from "./dmtools/routes.js";
+import { DmToolsService } from "./dmtools/service.js";
 
 export async function buildApp(
   config: Config,
@@ -52,6 +54,7 @@ export async function buildApp(
     assets,
     scenes: new SceneService(db, campaigns, assets),
     combat: new CombatService(db, chat),
+    dmTools: new DmToolsService(db, campaigns, assets, chat),
   };
   app.decorate("ctx", ctx);
   app.decorateRequest("auth", null);
@@ -110,6 +113,7 @@ export async function buildApp(
   await app.register(chatRoutes);
   await app.register(assetRoutes);
   await app.register(sceneRoutes);
+  await app.register(dmToolRoutes);
   await app.register(sheetImportRoutes, { extractor: opts.sheetExtractor !== undefined ? opts.sheetExtractor : extractorFromConfig(config) });
 
   if (config.WEB_DIST && existsSync(config.WEB_DIST)) {

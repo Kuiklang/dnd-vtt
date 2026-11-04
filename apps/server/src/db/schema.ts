@@ -341,6 +341,13 @@ export interface TokenStats {
   initiativeBonus: number;
   conditions: TokenCondition[];
   defenses: Defenses;
+  /** Where this token's stat block comes from (SRD bestiary entry or a campaign NPC/monster sheet). GM-only. */
+  statBlock?: StatBlockRef | null;
+}
+
+export interface StatBlockRef {
+  type: "srd" | "character";
+  id: string;
 }
 
 export const fogOps = pgTable(
@@ -431,3 +438,86 @@ export type CharacterRow = typeof characters.$inferSelect;
 export type ChatMessageRow = typeof chatMessages.$inferSelect;
 export type DiceRollRow = typeof diceRolls.$inferSelect;
 export type GameSession = typeof gameSessions.$inferSelect;
+
+/*
+ * Phase 5: DM toolkit.
+ */
+
+export const journalVisibility = pgEnum("journal_visibility", ["gm", "all", "selected", "author"]);
+
+/**
+ * Journal entries and handouts. Visibility: "gm" = DMs only, "all" = every member,
+ * "selected" = DMs + `sharedWith`, "author" = the author only (personal notes).
+ */
+export const journalEntries = pgTable(
+  "journal_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id").references(() => users.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    body: text("body").notNull().default(""),
+    folder: text("folder").notNull().default(""),
+    visibility: journalVisibility("visibility").notNull().default("gm"),
+    sharedWith: uuid("shared_with").array().notNull().default(sql`'{}'::uuid[]`),
+    /** Optional handout image (an asset of this campaign). */
+    imageAssetId: uuid("image_asset_id").references(() => assets.id, { onDelete: "set null" }),
+    pinned: boolean("pinned").notNull().default(false),
+    version: integer("version").notNull().default(1),
+    ...timestamps,
+  },
+  (t) => [index("journal_campaign_idx").on(t.campaignId)],
+);
+
+export interface EncounterEntry {
+  /** SRD bestiary id or campaign character id. */
+  ref: StatBlockRef;
+  name: string;
+  count: number;
+  xp: number;
+}
+
+export const encounters = pgTable(
+  "encounters",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    notes: text("notes").notNull().default(""),
+    entries: jsonb("entries").$type<EncounterEntry[]>().notNull(),
+    version: integer("version").notNull().default(1),
+    ...timestamps,
+  },
+  (t) => [index("encounters_campaign_idx").on(t.campaignId)],
+);
+
+export interface RandomTableEntry {
+  min: number;
+  max: number;
+  text: string;
+}
+
+export const randomTables = pgTable(
+  "random_tables",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** Dice formula rolled against the entries, e.g. "1d20" or "2d6". */
+    formula: text("formula").notNull(),
+    entries: jsonb("entries").$type<RandomTableEntry[]>().notNull(),
+    version: integer("version").notNull().default(1),
+    ...timestamps,
+  },
+  (t) => [index("random_tables_campaign_idx").on(t.campaignId)],
+);
+
+export type JournalRow = typeof journalEntries.$inferSelect;
+export type EncounterRow = typeof encounters.$inferSelect;
+export type RandomTableRow = typeof randomTables.$inferSelect;
