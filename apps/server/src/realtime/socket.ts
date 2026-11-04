@@ -11,6 +11,7 @@ import { rollForViewer, viewerFor, type ChatMessageDto, type RollDto } from "../
 import { cleanText } from "../lib/validation.js";
 import { canSeeJournal, toJournalDto } from "../dmtools/service.js";
 import type { JournalRow } from "../db/schema.js";
+import { viewAudio, type AudioSnapshot } from "../audio/service.js";
 
 export type PresenceStatus = "online" | "reconnecting" | "offline";
 
@@ -80,6 +81,24 @@ const actionsPatch = z
   .object({ action: z.boolean(), bonusAction: z.boolean(), reaction: z.boolean(), freeInteraction: z.boolean(), movementUsed: z.number().min(0).max(10000) })
   .partial();
 const point = z.object({ x: z.number(), y: z.number() });
+const volume = z.number().min(0).max(1);
+const audioControlSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("playTrack"), trackId: z.uuid() }),
+  z.object({ kind: z.literal("playPlaylist"), playlistId: z.uuid(), trackId: z.uuid().optional(), shuffle: z.boolean().optional() }),
+  z.object({ kind: z.literal("pause") }),
+  z.object({ kind: z.literal("resume") }),
+  z.object({ kind: z.literal("stop") }),
+  z.object({ kind: z.literal("next") }),
+  z.object({ kind: z.literal("prev") }),
+  z.object({ kind: z.literal("seek"), position: z.number().min(0).max(6 * 3600) }),
+  z.object({ kind: z.literal("musicVolume"), volume }),
+  z.object({ kind: z.literal("loop"), loop: z.enum(["off", "track", "queue"]) }),
+  z.object({ kind: z.literal("ambientAdd"), trackId: z.uuid(), volume: volume.optional() }),
+  z.object({ kind: z.literal("ambientRemove"), layerId: z.uuid() }),
+  z.object({ kind: z.literal("ambientVolume"), layerId: z.uuid(), volume }),
+  z.object({ kind: z.literal("ambientToggle"), layerId: z.uuid(), playing: z.boolean() }),
+  z.object({ kind: z.literal("stopAll") }),
+]);
 const fogShapeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal(FOG_SHAPES[0]), x: z.number(), y: z.number(), width: z.number(), height: z.number() }),
   z.object({ kind: z.literal(FOG_SHAPES[1]), x: z.number(), y: z.number(), radius: z.number() }),
@@ -89,6 +108,8 @@ const fogShapeSchema = z.discriminatedUnion("kind", [
 export class Realtime {
   readonly io: Server;
   private presence = new Map<string, Map<string, PresenceEntry>>();
+  /** Per-campaign timer that advances the music queue when a track ends. */
+  private audioTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
     private readonly app: FastifyInstance,
@@ -226,7 +247,9 @@ export class Realtime {
         chat.rollHistory(m, { limit: 50 }),
       ]);
       const combatState = await this.ctx.combat.state(m);
-      return { presence: this.presenceFor(campaignId), messages, rolls, combat: combatState };
+      const audioSnap = await this.ctx.audio.snapshot(campaignId);
+      this.scheduleAudio(campaignId, audioSnap);
+      return { presence: this.presenceFor(campaignId), messages, rolls, combat: combatState, audio: viewAudio(audioSnap, m.caps, Date.now()) };
     });
 
     this.handle(s, "campaign:leave", campaignIdSchema, async ({ campaignId }) => {
@@ -258,6 +281,26 @@ export class Realtime {
       const dto = await chat.roll(m, input);
       // The roller gets their own view of the result (redacted for blind rolls).
       return rollForViewer(dto, viewerFor(data.userId, m.role));
+    });
+
+    // ---- Music & ambience -------------------------------------------------
+
+    this.handle(s, "audio:control", campaignIdSchema.extend({ action: audioControlSchema }), async ({ campaignId, action }) => {
+      const m = await campaigns.membership(campaignId, data.userId);
+      const snap = await this.ctx.audio.control(m, action);
+      await this.audioChanged(campaignId, snap);
+      return viewAudio(snap, m.caps, Date.now());
+    });
+
+    this.handle(s, "audio:sync", campaignIdSchema, async ({ campaignId }) => {
+      const m = await campaigns.membership(campaignId, data.userId);
+      return viewAudio(await this.ctx.audio.snapshot(campaignId), m.caps, Date.now());
+    });
+
+    this.handle(s, "audio:sfx", campaignIdSchema.extend({ trackId: z.uuid(), volume: volume.default(1) }), async ({ campaignId, trackId, volume: v }) => {
+      const m = await campaigns.membership(campaignId, data.userId);
+      const track = await this.ctx.audio.sfx(m, trackId);
+      this.io.to(room(campaignId)).emit("audio:sfx", { campaignId, track, volume: v });
     });
 
     // ---- Scenes / tokens / fog -------------------------------------------
@@ -469,6 +512,33 @@ export class Realtime {
     }).catch((err) => this.app.log.error({ err }, "handoutShown failed"));
   }
 
+  /** Pushes each member's view of the playback state and re-arms the end-of-track timer. */
+  async audioChanged(campaignId: string, snap?: AudioSnapshot) {
+    try {
+      const current = snap ?? (await this.ctx.audio.snapshot(campaignId));
+      const now = Date.now();
+      await this.tailoredCaps(campaignId, (_userId, caps) => [["audio:state", { campaignId, audio: viewAudio(current, caps, now) }]]);
+      this.scheduleAudio(campaignId, current);
+    } catch (err) {
+      this.app.log.error({ err }, "audioChanged failed");
+    }
+  }
+
+  private scheduleAudio(campaignId: string, snap: AudioSnapshot) {
+    const prev = this.audioTimers.get(campaignId);
+    if (prev) clearTimeout(prev);
+    this.audioTimers.delete(campaignId);
+    const at = this.ctx.audio.nextChangeAt(snap);
+    if (at === null) return;
+    // A little after the end, so the snapshot sees the track as finished.
+    const timer = setTimeout(() => {
+      this.audioTimers.delete(campaignId);
+      void this.audioChanged(campaignId);
+    }, Math.min(Math.max(0, at - Date.now()) + 250, 2 ** 31 - 1));
+    timer.unref?.();
+    this.audioTimers.set(campaignId, timer);
+  }
+
   broadcastChat(msg: ChatMessageDto) {
     void this.tailored(msg.campaignId, "chat:message", (userId, role) =>
       canSeeChatMessage(msg.channel, { authorId: msg.senderId ?? "", recipientIds: msg.recipientIds }, viewerFor(userId, role))
@@ -631,7 +701,13 @@ export class Realtime {
     for (const c of campaignIds) this.campaignChanged(c, "members");
   }
 
+  stopTimers() {
+    for (const t of this.audioTimers.values()) clearTimeout(t);
+    this.audioTimers.clear();
+  }
+
   async close() {
+    this.stopTimers();
     for (const map of this.presence.values()) for (const e of map.values()) if (e.timer) clearTimeout(e.timer);
     await this.io.close();
   }

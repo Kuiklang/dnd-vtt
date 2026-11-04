@@ -119,3 +119,23 @@ export async function upload(app: FastifyInstance, c: Client, fields: Record<str
     payload: Buffer.concat(parts),
   });
 }
+
+/** A silent 8-bit mono PCM WAV file of the given length. */
+export function wavBytes(seconds: number, sampleRate = 8000): Buffer {
+  const samples = Math.round(seconds * sampleRate);
+  const h = Buffer.alloc(44);
+  h.write("RIFF", 0, "ascii");
+  h.writeUInt32LE(36 + samples, 4);
+  h.write("WAVE", 8, "ascii");
+  h.write("fmt ", 12, "ascii");
+  h.writeUInt32LE(16, 16);
+  h.writeUInt16LE(1, 20); // PCM
+  h.writeUInt16LE(1, 22); // mono
+  h.writeUInt32LE(sampleRate, 24);
+  h.writeUInt32LE(sampleRate, 28);
+  h.writeUInt16LE(1, 32);
+  h.writeUInt16LE(8, 34);
+  h.write("data", 36, "ascii");
+  h.writeUInt32LE(samples, 40);
+  return Buffer.concat([h, Buffer.alloc(samples, 128)]);
+}

@@ -42,14 +42,46 @@ export async function assetRoutes(app: FastifyInstance) {
     const { user } = requireAuth(req);
     const { id } = parse(idParams, req.params);
     const row = await assets.readable(id, user.id);
-    const file = await assets.stream(row);
+    const range = parseRange(req.headers.range, row.sizeBytes);
+    if (range === "invalid") {
+      return reply.code(416).header("content-range", `bytes */${row.sizeBytes}`).send();
+    }
+    const file = await assets.stream(row, range ?? undefined);
     if (!file) return reply.code(404).send({ error: { code: "not_found", message: "File missing from storage" } });
     // Content is immutable per id; private because access is permission-checked.
-    return reply
+    reply
       .header("content-type", row.mime)
-      .header("content-length", file.size)
+      .header("accept-ranges", "bytes")
       .header("cache-control", "private, max-age=31536000, immutable")
-      .header("content-disposition", "inline")
-      .send(file.stream);
+      .header("content-disposition", "inline");
+    // Browsers fetch audio in byte ranges so they can seek (and Chrome needs it to set currentTime).
+    if (range) {
+      return reply
+        .code(206)
+        .header("content-range", `bytes ${range.start}-${range.end}/${file.size}`)
+        .header("content-length", range.end - range.start + 1)
+        .send(file.stream);
+    }
+    return reply.header("content-length", file.size).send(file.stream);
   });
+}
+
+/** Parses a single `bytes=a-b` range. Multi-range requests fall back to the whole file. */
+export function parseRange(header: string | undefined, size: number): { start: number; end: number } | null | "invalid" {
+  if (!header) return null;
+  const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!m || (m[1] === "" && m[2] === "")) return null;
+  let start: number;
+  let end: number;
+  if (m[1] === "") {
+    const suffix = Number(m[2]);
+    if (suffix === 0) return "invalid";
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = Number(m[1]);
+    end = m[2] === "" ? size - 1 : Math.min(Number(m[2]), size - 1);
+  }
+  if (start >= size || start > end) return "invalid";
+  return { start, end };
 }

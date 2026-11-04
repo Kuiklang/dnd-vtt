@@ -104,6 +104,22 @@
 - [ ] Journal: ลากจัดลำดับ, ลิงก์ระหว่าง entry, ประวัติการแก้ไข
 - [ ] Random table ซ้อนกัน (entry เรียกตารางอื่น)
 
-## Phase 6–9
+## Phase 6 — Music ✅
+
+- [x] อัปโหลดเสียง (MP3/OGG/WAV/FLAC/M4A/WEBM ≤ 30 MB) ตรวจ magic bytes ที่ server, เฉพาะ `music.control`
+- [x] ส่งไฟล์แบบ HTTP Range (206) เพื่อเลื่อนตำแหน่งได้
+- [x] คลังเสียง: หมวด music/ambient/sfx, แท็ก, ค้นหา, เปลี่ยนชื่อ/หมวด, ลบ (ออกจาก playlist + หยุดเล่น); ผู้เล่นไม่เห็นรายการ
+- [x] Playlist: สร้าง/เรียง/แก้ (versioning)/ลบ, เล่นตามลำดับหรือสุ่ม, loop off/track/queue
+- [x] สถานะการเล่นเก็บใน DB, sync ด้วยนาฬิกา server + แก้ drift, server เลื่อนเพลงเองเมื่อจบ, รีโหลดแล้วได้สถานะเดิม
+- [x] Ambient layers สูงสุด 6 ชั้น (เปิด-ปิด/ระดับเสียงแยก), SFX ครั้งเดียว, หยุดทั้งหมด
+- [x] ระดับเสียงของผู้เล่นเอง (รวม/เพลง/บรรยากาศ/เอฟเฟกต์/ปิด) + ปุ่มเปิดเสียงเมื่อเบราว์เซอร์บล็อก autoplay
+- [x] ผู้เล่นได้เฉพาะเพลงปัจจุบัน ไม่ได้คิว/playlist
+- [x] Tests: unit (audio model, volume), integration (upload, Range, สิทธิ์, playlist, realtime, auto-advance), E2E `e2e/phase6.e2e.cjs`
+- [ ] Crossfade ระหว่างเพลง
+- [ ] เพลงประจำ scene / เพลงเริ่มต้นของแคมเปญ (ทำพร้อม scene switching ใน Phase 7)
+- [ ] วัดความยาวเพลงที่ server (ตอนนี้ใช้ค่าจากเบราว์เซอร์ที่อัปโหลด)
+- [ ] ให้ผู้เล่นขอเพลง / soundboard สำหรับผู้เล่น (ผ่าน permission override)
+
+## Phase 7–9
 
 ดู [docs/ROADMAP.md](docs/ROADMAP.md)

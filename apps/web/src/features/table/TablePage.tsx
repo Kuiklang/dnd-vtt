@@ -21,6 +21,9 @@ import type { FogShapeKind, Tool } from "./types";
 import type { TokenInput } from "./useTable";
 import { DmToolkit, type ToolkitTab } from "../dmtools/DmToolkit";
 import { HandoutPopup } from "../dmtools/HandoutPopup";
+import { AudioDock } from "../audio/AudioDock";
+import { MusicPanel } from "../audio/MusicPanel";
+import { useCampaignAudio } from "../audio/useCampaignAudio";
 import { useJournal } from "../dmtools/useJournal";
 
 export function TablePage() {
@@ -152,6 +155,8 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
   // ---- DM toolkit / journal ----
   const journal = useJournal(detail.campaign.id);
   const [toolkit, setToolkit] = useState<{ open: boolean; tab: ToolkitTab }>({ open: false, tab: "journal" });
+  const audio = useCampaignAudio(detail.campaign.id);
+  const [musicOpen, setMusicOpen] = useState(false);
   const placeMany = useCallback(
     async (list: TokenInput[]) => {
       const points = dropPoints(list.length);
@@ -175,6 +180,7 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
     <div className="flex h-[calc(100vh-3.5rem)] flex-col">
       <DiceOverlay roll={lobby.lastRoll} />
       <HandoutPopup campaignId={detail.campaign.id} />
+      {caps.has("music.control") && <MusicPanel open={musicOpen} onClose={() => setMusicOpen(false)} campaignId={detail.campaign.id} audio={audio} />}
       <DmToolkit
         open={toolkit.open}
         onClose={() => setToolkit((s) => ({ ...s, open: false }))}
@@ -215,7 +221,11 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
         {caps.has("npc.manage") && (
           <ToolButton active={toolkit.open && toolkit.tab !== "journal"} onClick={() => setToolkit((s) => ({ open: true, tab: s.tab === "journal" ? "bestiary" : s.tab }))} label={t("toolkit.title")} icon="🧰" testId="open-toolkit" />
         )}
+        {caps.has("music.control") && (
+          <ToolButton active={musicOpen} onClick={() => setMusicOpen(true)} label={t("audio.title")} icon="🎵" testId="open-music" />
+        )}
         <div className="ml-auto flex items-center gap-3">
+          <AudioDock audio={audio} />
           <SaveIndicator status={table.save} offline={lobby.connection !== "connected"} />
           <ConnectionDot connection={lobby.connection} />
         </div>
