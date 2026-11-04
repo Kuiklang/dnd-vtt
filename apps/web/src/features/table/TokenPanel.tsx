@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { TOKEN_LAYERS, TOKEN_SHAPES, type RulesetDefinition, type TokenLayer, type TokenShape } from "@vtt/rules";
+import { TOKEN_LAYERS, TOKEN_SHAPES, getSrdMonster, type RulesetDefinition, type TokenLayer, type TokenShape } from "@vtt/rules";
 import { Button, Field, Input, Select } from "../../components/ui";
 import { errorMessage } from "../../lib/api";
 import { IMAGE_ACCEPT, uploadImage } from "../../lib/upload";
@@ -12,6 +12,7 @@ import type { Combat } from "./useCombat";
 import { VitalsPanel } from "./VitalsPanel";
 import { TokenRolls } from "./TokenRolls";
 import type { RollRequest } from "../lobby/useLobby";
+import { StatBlock } from "../dmtools/StatBlock";
 
 interface Props {
   table: Table;
@@ -104,6 +105,7 @@ export function TokenPanel({ table, detail, isGM, selected, combat, ruleset, cha
       {selected?.characterId && (isGM || selected.ownerIds.includes(detail.me.userId)) && (
         <TokenRolls characterId={selected.characterId} tick={characterTick} myCharacterId={myCharacterId} onRoll={onRoll} />
       )}
+      {selected && isGM && selected.statBlock && <TokenStatBlock key={`sb-${selected.id}`} token={selected} tick={characterTick} onRoll={onRoll} />}
       {selected && isGM && <TokenEditor key={selected.id} token={selected} table={table} detail={detail} campaignId={campaignId} onSelect={onSelect} />}
     </div>
   );
@@ -224,6 +226,30 @@ function TokenEditor({ token, table, detail, campaignId, onSelect }: { token: To
           {t("common.delete")}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** DM-only: the stat block a monster token was placed from, with DM-only rolls. */
+function TokenStatBlock({ token, tick, onRoll }: { token: TokenDto; tick: number; onRoll(req: RollRequest): Promise<unknown> }) {
+  const t = useT();
+  const [open, setOpen] = useState(true);
+  const ref = token.statBlock!;
+  const monster = ref.type === "srd" ? getSrdMonster(ref.id) : undefined;
+  return (
+    <div className="rounded-md border border-ink-700 p-2" data-testid="token-stat-block">
+      <button type="button" className="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-wider text-gold-400" onClick={() => setOpen((o) => !o)}>
+        {t("bestiary.statBlock")} <span>{open ? "▾" : "▸"}</span>
+      </button>
+      {open && (
+        <div className="mt-2">
+          {ref.type === "srd" ? (
+            monster ? <StatBlock monster={monster} onRoll={onRoll} label={token.name} /> : <p className="text-xs text-parchment-500">{t("bestiary.unknown")}</p>
+          ) : (
+            <TokenRolls characterId={ref.id} tick={tick} myCharacterId={null} onRoll={onRoll} visibility="dm_only" label={token.name} />
+          )}
+        </div>
+      )}
     </div>
   );
 }

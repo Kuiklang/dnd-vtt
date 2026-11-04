@@ -52,3 +52,11 @@
 33. **Character creator ใช้เฉพาะ SRD 5.1** (race/subrace ที่มีใน SRD, 12 class, Acolyte) + background ของผู้เล่นเอง; ไม่ใส่อุปกรณ์อัตโนมัติ
     เพื่อไม่สร้างเนื้อหาที่ไม่อยู่ใน SRD; ผลลัพธ์เป็น CharacterData ปกติ
 34. **Zod jitless ตั้งใน `@vtt/rules`** — เพราะ schema ถูกสร้างตอนโหลด module ซึ่งอาจเกิดก่อนโค้ดของแอป; ทำเฉพาะใน browser (CSP ห้าม eval)
+35. **Bestiary เป็นข้อมูลใน `@vtt/rules`** (ไม่ใช่ตารางใน DB) — อ่านได้ทันทีทั้ง client/server, มี test ตรวจความถูกต้องของตัวเลข;
+    monster ของแคมเปญเป็น character `kind: monster` ที่มีอยู่แล้ว (ไม่สร้างระบบใหม่)
+36. **Token มอนสเตอร์เก็บ HP ของตัวเอง** (ไม่ผูกกับชีต) แม้วางจากชีตแคมเปญ — goblin 3 ตัวต้องเจ็บแยกกัน; ลิงก์ stat block (`stats.statBlock`)
+    ใช้เปิด stat block เท่านั้น และถูกตัดออกก่อนส่งให้ผู้เล่น
+37. **Journal visibility 4 แบบตรวจที่ server ทั้ง REST, realtime และไฟล์รูป** — "author" เป็นบันทึกส่วนตัวที่ DM ก็ไม่เห็น;
+    การ "แสดง handout" = ขยายสิทธิ์อ่าน + push ให้คนที่เลือก (ไม่มีสำเนาแยก)
+38. **ไม่มีระดับความยาก encounter** — ตาราง XP threshold/multiplier อยู่ใน DMG ซึ่งไม่ใช่ SRD จึงไม่นำมาใส่; แสดง XP รวมและต่อผู้เล่น
+39. **สิทธิ์ใหม่ `journal.manage`, `tables.manage`** (DM/co-DM ได้อัตโนมัติ; `journal.manage` ให้ผู้เล่นผ่าน override ไม่ได้)

@@ -34,6 +34,13 @@ export interface TokenStats {
   initiativeBonus: number;
   conditions: TokenCondition[];
   defenses: Defenses;
+  /** Set when placed from the bestiary or a campaign monster; GM-only. */
+  statBlock?: StatBlockRef | null;
+}
+
+export interface StatBlockRef {
+  type: "srd" | "character";
+  id: string;
 }
 
 export interface TokenDto extends TokenState {
@@ -41,6 +48,8 @@ export interface TokenDto extends TokenState {
   vitals: TokenVitals | null;
   /** Vitals exist but the server withheld them from this viewer. */
   vitalsHidden: boolean;
+  /** GM-only stat block link (always null for players). */
+  statBlock?: StatBlockRef | null;
 }
 
 export interface CombatantDto {

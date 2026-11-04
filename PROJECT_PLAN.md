@@ -4,7 +4,7 @@
 > เอกสารนี้คือบันทึกความคืบหน้าหลักของโปรเจกต์ อัปเดตทุกครั้งที่จบงานแต่ละช่วง
 > รายการงานย่อยและสถานะจริงอยู่ใน [TODO.md](TODO.md) · รายละเอียดเชิงเทคนิคอยู่ใน [docs/](docs/)
 
-ปรับปรุงล่าสุด: **2026-11-04** · สถานะ: **Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ · Phase 4 ✅ → MVP ครบ · ถัดไป Phase 5 (DM Toolkit)**
+ปรับปรุงล่าสุด: **2026-11-04** · สถานะ: **Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ · Phase 4 ✅ · Phase 5 ✅ → MVP ครบ · ถัดไป Phase 6 (Music)**
 
 ---
 
@@ -61,8 +61,8 @@
 | 2 Core VTT | asset upload, map canvas, grid, token, fog, realtime sync, save status, reconnect | ✅ เสร็จ |
 | 4 Combat *(ทำก่อน 3 เพื่อปิด MVP)* | combat mode, initiative, turn/round, HP/damage/healing บน token, conditions, combat HUD | ✅ เสร็จ |
 | 3 Character & Dice | character creator wizard, dice animation, character import (PDF/รูป), ability checks จาก token *(token↔character HP sync ทำแล้วใน Phase 4)* | ✅ เสร็จ |
-| 5 DM Toolkit | NPC/Monster library, encounter builder, journal, handouts, DM screen, random tables | ⏭ ถัดไป |
-| 6 Music | audio upload, playlist, ambient, realtime sync | |
+| 5 DM Toolkit | NPC/Monster library, encounter builder, journal, handouts, DM screen, random tables | ✅ เสร็จ |
+| 6 Music | audio upload, playlist, ambient, realtime sync | ⏭ ถัดไป |
 | 7 Advanced | spells/AoE, inventory, scene templates, undo/redo, session recap, timeline, drawing tools, custom layers | |
 | 8 Advanced features | dynamic lighting & vision, voice chat, AI DM assistant | |
 | 9 Polish | UI polish, performance, security review, docs | |
@@ -210,6 +210,48 @@
 - Creator รองรับ 5e 2014 เท่านั้น (5e 2024 ใช้ชีตว่าง), ยังไม่เลือก spell/อุปกรณ์ให้
 - การเรียก Claude API จริงยังไม่ได้ทดสอบใน environment นี้ (ไม่มี key) — ทดสอบผ่าน extractor interface + stub แล้ว; ต้องใส่ key ใน `apps/server/.env` เพื่อใช้งาน
 
+### 2026-11-04 — Phase 5: DM Toolkit ✅
+
+**สิ่งที่ใช้งานได้จริง** (ปุ่ม 📖 Journal และ 🧰 เครื่องมือ DM บนโต๊ะและในล็อบบี้)
+
+- **Bestiary**: stat block จาก SRD 5.1 จำนวน 30 ตัว (Commoner ถึง Young Red Dragon) ค้นหาด้วยชื่อ/ประเภท/CR;
+  กดทอย ability check, attack, damage ได้จาก stat block (DM-only); วางลงแผนที่ทีละหลายตัว (ตั้งชื่อ Goblin 1, 2, 3…,
+  HP เฉลี่ยหรือทอย hit dice แยกต่อตัว, ซ่อนจากผู้เล่น, ขนาด token ตาม size) โดยแต่ละ token มี HP/AC/defenses ของตัวเอง;
+  "คัดลอกเข้าแคมเปญ" สร้างชีต monster ที่แก้ได้ และเลข save/skill/attack ที่คำนวณตรงกับที่ SRD พิมพ์
+- **Stat block บน token**: เลือก token มอนสเตอร์ → เห็น stat block และทอยได้ทันที; ลิงก์ stat block ถูกตัดออกก่อนส่งให้ผู้เล่น
+- **Encounter builder**: รวม monster จาก SRD และของแคมเปญ, จำนวน, XP รวมและต่อผู้เล่น, บันทึก/แก้ (versioning)/ลบ;
+  "วางและเริ่มต่อสู้" วาง token แบบซ่อน (HP ทอยแยก) แล้วเริ่ม combat หรือเพิ่มเข้า combat ที่กำลังเล่น
+- **Journal**: Markdown (ไม่ render HTML ดิบ), โฟลเดอร์, ปักหมุด, ค้นหา, แนบรูป; สิทธิ์ต่อ entry: DM เท่านั้น / ทุกคน /
+  DM + ผู้เล่นที่เลือก / บันทึกส่วนตัว (แม้ DM ก็ไม่เห็น); ผู้เล่นเขียนได้แต่แก้ได้เฉพาะของตัวเอง; อัปเดต realtime เฉพาะคนที่มีสิทธิ์
+  และคนที่เสียสิทธิ์จะได้คำสั่งลบออก
+- **Handout**: DM กด "แสดง handout" ให้ทุกคนหรือผู้เล่นคนเดียว → หน้าต่างเด้งขึ้นจอผู้เล่นทันทีพร้อมรูป;
+  รูป handout ถูกกันไม่ให้ดาวน์โหลด/ไม่โผล่ในรายการ asset จนกว่าจะถูกแชร์
+- **Random tables**: กรอกแบบ "1-2 Clear skies" ทีละบรรทัด, server ตรวจว่าไม่ซ้อนและอยู่ในช่วงของลูกเต๋า,
+  ทอยที่ server และลง dice log (DM-only หรือเปิดเผย) โดย label มีผลลัพธ์
+- **DM Screen**: DC ทั่วไป, cover, conditions ตาม ruleset ของแคมเปญ, action ในการต่อสู้, ประเภทดาเมจ, ปุ่มทอยลับ
+
+**การทดสอบ (รันจริงทั้งหมด)**
+
+| ชุด | ผล |
+| --- | --- |
+| `packages/rules` unit (เพิ่ม bestiary 3 ตัว: ความถูกต้องของข้อมูลทั้ง 30 ตัว, token stats, การแปลงเป็นชีต) | 134/134 ✅ |
+| `apps/server` integration (เพิ่ม 5 ตัว: สิทธิ์ journal, realtime ต่อผู้รับ + handout + รูป, encounters, tables + dice log, ลิงก์ stat block) | 51/51 ✅ |
+| `apps/web` unit (เพิ่ม parse ตาราง) | 10/10 ✅ |
+| E2E Phase 5: วาง goblin 3 ตัว, คัดลอก Bandit Captain, encounter ซ่อน + เริ่ม combat, ทอย stat block แบบ DM-only, journal DM-only ไม่หลุด, บันทึกส่วนตัวผู้เล่น, handout เด้ง + รูปโหลดได้, random table DM-only, DM screen, ไม่มี console error | ✅ |
+| E2E Phase 1–4 (regression) | ✅ |
+| `pnpm typecheck` ทั้ง 3 package | ✅ |
+
+**Error ที่พบและแก้แล้ว**
+
+1. เลือก token มอนสเตอร์แล้ว stat block ซ้อนกันหลายชุด — React key ชนกับ token editor → แยก key
+2. Dialog ปิดด้วย Esc ได้เฉพาะตอนโฟกัสอยู่ใน dialog → ฟัง Esc ทั้งหน้าต่าง
+3. แก้ AC/HP ของ token จะส่ง stats ใหม่ทับลิงก์ stat block → server เก็บลิงก์เดิมไว้ถ้าไม่ได้ระบุ
+
+**ข้อจำกัดที่ยังมี**
+
+- ไม่มีระดับความยาก encounter (ตาราง XP threshold อยู่ใน DMG ไม่ใช่ SRD) — แสดง XP รวมและต่อผู้เล่นแทน
+- Bestiary มี 30 ตัวที่ใช้บ่อย ไม่ใช่ทั้ง SRD; ยังไม่มีหน้าแก้ custom ruleset
+
 ---
 
 ## 5. วิธีรันและทดสอบ
@@ -223,5 +265,5 @@ cp apps/server/.env.example apps/server/.env
 pnpm db:migrate && pnpm dev                    # http://localhost:5173
 TEST_DATABASE_URL=postgres://… pnpm test       # unit + integration
 pnpm --filter @vtt/web build && (cd apps/server && WEB_DIST=../web/dist WEB_ORIGIN=http://localhost:3001 pnpm start)
-for f in phase1 phase2 phase3 phase4; do BASE_URL=http://localhost:3001 node e2e/$f.e2e.cjs; done
+for f in phase1 phase2 phase3 phase4 phase5; do BASE_URL=http://localhost:3001 node e2e/$f.e2e.cjs; done
 ```

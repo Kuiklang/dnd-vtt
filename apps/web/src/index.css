@@ -81,3 +81,13 @@ input[type="number"] {
   50% { transform: rotate(180deg) scale(1.05); }
   100% { transform: rotate(360deg) scale(0.92); }
 }
+
+/* Journal Markdown (Phase 5) */
+.journal-md h1 { font-family: var(--font-display, serif); font-size: 1.35rem; color: var(--color-gold-300, #e6c56b); }
+.journal-md h2 { font-family: var(--font-display, serif); font-size: 1.15rem; color: var(--color-gold-300, #e6c56b); }
+.journal-md h3 { font-weight: 600; color: var(--color-parchment-50, #f6efe0); }
+.journal-md ul { list-style: disc; padding-left: 1.25rem; }
+.journal-md ol { list-style: decimal; padding-left: 1.25rem; }
+.journal-md blockquote { border-left: 3px solid rgba(217, 177, 79, 0.5); padding-left: 0.75rem; font-style: italic; color: var(--color-parchment-300, #d8ccb0); }
+.journal-md code { background: rgba(0, 0, 0, 0.35); padding: 0 0.25rem; border-radius: 0.2rem; }
+.journal-md hr { border-color: rgba(217, 177, 79, 0.3); }
