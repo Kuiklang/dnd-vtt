@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+/* Dark-fantasy tabletop palette. Tokens are used through Tailwind's theme. */
+@theme {
+  --color-ink-950: #0b0a09;
+  --color-ink-900: #13110f;
+  --color-ink-850: #1a1714;
+  --color-ink-800: #221e1a;
+  --color-ink-700: #2f2a24;
+  --color-ink-600: #423a31;
+  --color-ink-500: #5c5246;
+  --color-parchment-50: #f6efe0;
+  --color-parchment-200: #e2d5bb;
+  --color-parchment-400: #b9a888;
+  --color-parchment-500: #998a6f;
+  --color-gold-300: #ebcd7a;
+  --color-gold-400: #d9b14f;
+  --color-gold-500: #c39a33;
+  --color-gold-600: #9a7724;
+  --color-blood-400: #e06a5c;
+  --color-blood-500: #c2463a;
+  --color-blood-700: #7d241c;
+  --color-arcane-400: #8fa8ff;
+  --color-arcane-500: #6b83e8;
+  --color-moss-400: #7fc28a;
+  --color-moss-600: #3f7a4a;
+  --font-display: "Cinzel", ui-serif, Georgia, serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 20% -10%, rgba(195, 154, 51, 0.08), transparent 60%),
+    radial-gradient(900px 500px at 110% 10%, rgba(107, 131, 232, 0.06), transparent 60%),
+    var(--color-ink-950);
+  color: var(--color-parchment-200);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+}
+
+/* Number inputs: hide spinners for compact sheet fields. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+::selection {
+  background: rgba(195, 154, 51, 0.35);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-gold-400);
+  outline-offset: 2px;
+}
+
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-ink-600) transparent;
+}

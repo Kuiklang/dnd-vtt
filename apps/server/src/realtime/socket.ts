@@ -220,8 +220,10 @@ export class Realtime {
     });
 
     this.handle(s, "dice:roll", rollSchema, async ({ campaignId, ...input }) => {
-      const dto = await chat.roll(await campaigns.membership(campaignId, data.userId), input);
-      return { id: dto.id };
+      const m = await campaigns.membership(campaignId, data.userId);
+      const dto = await chat.roll(m, input);
+      // The roller gets their own view of the result (redacted for blind rolls).
+      return rollForViewer(dto, viewerFor(data.userId, m.role));
     });
 
     s.on("disconnect", () => {

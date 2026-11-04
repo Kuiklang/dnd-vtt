@@ -91,10 +91,11 @@ export async function buildApp(config: Config, db: Db, opts: { realtime?: boolea
   await app.register(chatRoutes);
 
   if (config.WEB_DIST && existsSync(config.WEB_DIST)) {
-    await app.register(fastifyStatic, { root: path.resolve(config.WEB_DIST), wildcard: false });
+    await app.register(fastifyStatic, { root: path.resolve(config.WEB_DIST) });
     // SPA fallback for client-side routes.
     app.setNotFoundHandler((req, reply) => {
-      if (req.url.startsWith("/api/") || req.url.startsWith("/socket.io")) {
+      // Missing API routes and static assets are real 404s; everything else is a client route.
+      if (req.url.startsWith("/api/") || req.url.startsWith("/socket.io") || req.url.startsWith("/assets/")) {
         return reply.code(404).send({ error: { code: "not_found", message: "Not found" } });
       }
       return reply.sendFile("index.html");
