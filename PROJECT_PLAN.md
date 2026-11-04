@@ -4,7 +4,7 @@
 > เอกสารนี้คือบันทึกความคืบหน้าหลักของโปรเจกต์ อัปเดตทุกครั้งที่จบงานแต่ละช่วง
 > รายการงานย่อยและสถานะจริงอยู่ใน [TODO.md](TODO.md) · รายละเอียดเชิงเทคนิคอยู่ใน [docs/](docs/)
 
-ปรับปรุงล่าสุด: **2026-11-04** · สถานะ: **Phase 1 ✅ · Phase 2 ✅ · Phase 4 ✅ → MVP ครบ · ถัดไป Phase 3 (Character & Dice)**
+ปรับปรุงล่าสุด: **2026-11-04** · สถานะ: **Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ · Phase 4 ✅ → MVP ครบ · ถัดไป Phase 5 (DM Toolkit)**
 
 ---
 
@@ -25,13 +25,14 @@
 ### การตัดสินใจที่ผู้ใช้อนุมัติ (2026-11-04)
 
 1. โค้ดจะอยู่บน GitHub repo `dnd-vtt` (รอผู้ใช้สร้าง) — ระหว่างนี้ส่งเป็น git bundle ใน Project Files
-2. Stack: monorepo, Vite + React, Fastify + Socket.IO, PostgreSQL *(แผนเดิมระบุ Prisma — โค้ด Phase 1 ใช้ Drizzle; รอผู้ใช้ยืนยันว่าจะคง Drizzle)*
+2. Stack: monorepo, Vite + React, Fastify + Socket.IO, PostgreSQL + Drizzle *(แผนเดิมระบุ Prisma; ผู้ใช้ยืนยันให้คง Drizzle)*
 3. Auth เขียนเอง (session cookie) + Guest; Google Login ทีหลัง (ต้องมี OAuth credentials)
 4. Ruleset แรก 5e 2014 (SRD 5.1) และมี 5e 2024 (SRD 5.2) แล้ว
 5. MVP = Phase 1–4
 6. Dev แบบ local, storage ผ่าน interface, ตัดสินใจ hosting ตอนใกล้ MVP
 7. UI ไทย + อังกฤษ (ศัพท์เกมคงอังกฤษ)
 8. Map renderer = Konva
+9. อ่านชีตตัวละครจาก PDF/รูปด้วย Claude API (key อยู่ที่ server, ผู้ใช้ตรวจทุก field ก่อนบันทึก)
 
 บันทึกการตัดสินใจทั้งหมด: [docs/DECISIONS.md](docs/DECISIONS.md)
 
@@ -59,8 +60,8 @@
 | 1 Foundation | setup, auth, campaign, lobby, DB, roles, character system | ✅ เสร็จ |
 | 2 Core VTT | asset upload, map canvas, grid, token, fog, realtime sync, save status, reconnect | ✅ เสร็จ |
 | 4 Combat *(ทำก่อน 3 เพื่อปิด MVP)* | combat mode, initiative, turn/round, HP/damage/healing บน token, conditions, combat HUD | ✅ เสร็จ |
-| 3 Character & Dice | character creator wizard, dice animation, character import (PDF/รูป), ability checks จาก token *(token↔character HP sync ทำแล้วใน Phase 4)* | ⏭ ถัดไป |
-| 5 DM Toolkit | NPC/Monster library, encounter builder, journal, handouts, DM screen, random tables | |
+| 3 Character & Dice | character creator wizard, dice animation, character import (PDF/รูป), ability checks จาก token *(token↔character HP sync ทำแล้วใน Phase 4)* | ✅ เสร็จ |
+| 5 DM Toolkit | NPC/Monster library, encounter builder, journal, handouts, DM screen, random tables | ⏭ ถัดไป |
 | 6 Music | audio upload, playlist, ambient, realtime sync | |
 | 7 Advanced | spells/AoE, inventory, scene templates, undo/redo, session recap, timeline, drawing tools, custom layers | |
 | 8 Advanced features | dynamic lighting & vision, voice chat, AI DM assistant | |
@@ -171,6 +172,44 @@
 - Death saves ยังไม่มีปุ่มใน combat HUD (ทอยจาก character sheet ได้) · ลากสลับลำดับ initiative ยังไม่มี (แก้ตัวเลขแทน)
 - ระยะเคลื่อนที่ที่ใช้ต้องกรอกเอง ยังไม่คำนวณจากการลาก token
 
+### 2026-11-04 — Phase 3: Character & Dice ✅
+
+**สิ่งที่ใช้งานได้จริง**
+
+- **ทอยจาก token**: เลือก token ตัวละครบนแผนที่ → ทอย ability check / save / skill / initiative / attack / damage
+  (Normal / Advantage / Disadvantage) ทอยที่ server และลง dice log; เปิด character sheet เต็มได้จากโต๊ะ
+- **Dice animation 2D**: ลูกเต๋ากลิ้งแล้วหยุดที่ค่าจริงจาก server, critical/natural 1 มีสีต่าง, เสียงสังเคราะห์ด้วย Web Audio (ไม่มีไฟล์เสียง);
+  ปิดแอนิเมชัน/เสียงได้ใน profile และเคารพ "reduce motion" ของระบบ; ทอยแบบ DM-only ไม่แสดงให้ผู้เล่น
+- **นำเข้าชีตจาก PDF/รูป (Claude API)**: อัปโหลด PDF/PNG/JPEG/WEBP ≤10MB → server ส่งให้ Claude อ่านเป็น draft ที่มีโครงสร้าง
+  (structured output + Zod) → หน้าตรวจทานไฮไลต์ field ที่ AI ไม่แน่ใจ, แสดงคำเตือน, ค่าที่คำนวณได้ → ผู้ใช้แก้แล้วจึงบันทึก;
+  ไม่มีอะไรถูกบันทึกก่อนผู้ใช้กด Save; key อยู่ใน `.env` ของ server เท่านั้น; จำกัด 10 ครั้ง/ชม./ผู้ใช้ (`IMPORT_PER_HOUR`);
+  ถ้า server ไม่มี `ANTHROPIC_API_KEY` หน้าเว็บบอกชัดเจนและปุ่มถูกปิด
+- **Character creator** (`/characters/new`, 5e 2014 · SRD 5.1): 7 ขั้น — ชื่อ/alignment, race (+subrace, Half-Elf เลือก +1 สองค่า),
+  class, background (Acolyte หรือของผู้เล่นเอง), ability scores (standard array แบบสลับค่า / point buy 27 แต้มแสดงงบสด / ทอย 4d6),
+  skills (ปิด skill ที่ได้จาก race/background แล้ว), ตรวจทาน (HP, AC, initiative, speed) → สร้างเป็นชีตปกติที่แก้ได้ทั้งหมด;
+  กฎทั้งหมดอยู่ใน `@vtt/rules` (`validateCreatorChoices`, `buildSrdCharacter`) ใช้ร่วม client/server ได้
+
+**การทดสอบ (รันจริงทั้งหมด)**
+
+| ชุด | ผล |
+| --- | --- |
+| `packages/rules` unit (เพิ่ม creator 4 ตัว, import mapping 2 ตัว) | 131/131 ✅ |
+| `apps/server` integration (เพิ่ม sheet import 3 ตัว: PDF/PNG ผ่านและไม่บันทึก, ปฏิเสธไฟล์ปลอม/ไม่ล็อกอิน, rate limit, ไม่มี key → 503) | 46/46 ✅ |
+| `apps/web` unit (dice fx) | 9/9 ✅ |
+| E2E Phase 3: หน้า import บอกว่าไม่มี key, ตรวจทาน draft (ไฮไลต์ field ไม่แน่ใจ, แก้ค่า, บันทึก, ตรวจข้อมูลที่ server), creator สร้าง Hill Dwarf Cleric (point buy, standard array swap, skill ที่ซ้ำถูกปิด, HP 11 / AC 12) แล้วตรวจข้อมูลที่บันทึก | ✅ |
+| E2E Phase 1, 2, 4 (regression; Phase 4 เพิ่มขั้น dice animation) | ✅ |
+| `pnpm typecheck` ทั้ง 3 package | ✅ |
+
+**Error ที่พบและแก้แล้ว**
+
+1. CSP error ใน console: Zod ลอง `new Function` ตอนสร้าง schema ใน chunk ที่โหลดก่อน `main.tsx` → ตั้ง `jitless` ใน `@vtt/rules` เอง (ก่อน schema ใดๆ) เฉพาะใน browser
+2. E2E Phase 1 พังเพราะ dice overlay แสดงข้อความเดียวกับ dice log → ระบุ locator ให้ชี้ที่ log
+
+**ข้อจำกัดที่ยังมี**
+
+- Creator รองรับ 5e 2014 เท่านั้น (5e 2024 ใช้ชีตว่าง), ยังไม่เลือก spell/อุปกรณ์ให้
+- การเรียก Claude API จริงยังไม่ได้ทดสอบใน environment นี้ (ไม่มี key) — ทดสอบผ่าน extractor interface + stub แล้ว; ต้องใส่ key ใน `apps/server/.env` เพื่อใช้งาน
+
 ---
 
 ## 5. วิธีรันและทดสอบ
@@ -184,5 +223,5 @@ cp apps/server/.env.example apps/server/.env
 pnpm db:migrate && pnpm dev                    # http://localhost:5173
 TEST_DATABASE_URL=postgres://… pnpm test       # unit + integration
 pnpm --filter @vtt/web build && (cd apps/server && WEB_DIST=../web/dist WEB_ORIGIN=http://localhost:3001 pnpm start)
-for f in phase1 phase2 phase4; do BASE_URL=http://localhost:3001 node e2e/$f.e2e.cjs; done
+for f in phase1 phase2 phase3 phase4; do BASE_URL=http://localhost:3001 node e2e/$f.e2e.cjs; done
 ```

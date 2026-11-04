@@ -11,6 +11,8 @@ import { CharacterPage } from "./features/character/CharacterPage";
 import { ProfilePage } from "./pages/ProfilePage";
 // The table pulls in the canvas engine; load it only when a player opens the map.
 const TablePage = lazy(() => import("./features/table/TablePage").then((m) => ({ default: m.TablePage })));
+const ImportSheetPage = lazy(() => import("./features/character/ImportSheetPage").then((m) => ({ default: m.ImportSheetPage })));
+const CreateCharacterPage = lazy(() => import("./features/character/CreateCharacterPage").then((m) => ({ default: m.CreateCharacterPage })));
 import { LANGS, useLang, useT } from "./i18n";
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -105,6 +107,8 @@ export function App() {
             <Route path="/campaigns/new" element={<RequireAuth><CreateCampaignPage /></RequireAuth>} />
             <Route path="/campaigns/:id" element={<RequireAuth><LobbyPage /></RequireAuth>} />
             <Route path="/campaigns/:id/table" element={<RequireAuth><Suspense fallback={<Loading />}><TablePage /></Suspense></RequireAuth>} />
+            <Route path="/characters/new" element={<RequireAuth><Suspense fallback={<Loading />}><CreateCharacterPage /></Suspense></RequireAuth>} />
+            <Route path="/characters/import" element={<RequireAuth><Suspense fallback={<Loading />}><ImportSheetPage /></Suspense></RequireAuth>} />
             <Route path="/characters/:id" element={<RequireAuth><CharacterPage /></RequireAuth>} />
             <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
             <Route path="*" element={<div className="p-10 text-center text-parchment-400">Page not found. <Link className="text-gold-400 underline" to="/">Go home</Link></div>} />

@@ -17,6 +17,12 @@ const envSchema = z.object({
   UPLOAD_DIR: z.string().default("./data/uploads"),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   GUEST_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(7),
+  /** Claude API key for reading character sheets from PDFs/photos. Unset = import disabled (UI says so). */
+  ANTHROPIC_API_KEY: z.string().optional(),
+  /** Model used for sheet import. */
+  IMPORT_MODEL: z.string().default("claude-opus-5-5"),
+  /** Sheet imports allowed per user per hour (each one is a paid API call). */
+  IMPORT_PER_HOUR: z.coerce.number().int().min(1).max(1000).default(10),
   /** Disable rate limiting (tests only). */
   RATE_LIMIT: z
     .enum(["on", "off"])

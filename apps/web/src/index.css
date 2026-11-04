@@ -75,3 +75,9 @@ input[type="number"] {
   scrollbar-width: thin;
   scrollbar-color: var(--color-ink-600) transparent;
 }
+
+@keyframes dice-tumble {
+  0% { transform: rotate(0deg) scale(0.92); }
+  50% { transform: rotate(180deg) scale(1.05); }
+  100% { transform: rotate(360deg) scale(0.92); }
+}

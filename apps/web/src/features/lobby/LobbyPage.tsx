@@ -13,6 +13,7 @@ import { DiceTray } from "./DiceTray";
 import { InvitePanel } from "./InvitePanel";
 import { CampaignSettingsModal } from "./CampaignSettingsModal";
 import { CharacterSheetLoader } from "../character/CharacterSheetLoader";
+import { DiceOverlay } from "../dice/DiceOverlay";
 import { useT } from "../../i18n";
 
 export function LobbyPage() {
@@ -45,6 +46,7 @@ function LobbyView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
   return (
     <div className="mx-auto flex max-w-[1500px] flex-col gap-4 px-4 py-4 lg:h-[calc(100vh-3.5rem)]">
       <LobbyHeader lobby={lobby} detail={detail} caps={caps} onSettings={() => setSettingsOpen(true)} />
+      <DiceOverlay roll={lobby.lastRoll} />
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)_340px]">
         <div className="scroll-thin min-h-0 space-y-4 overflow-y-auto">
           <PartyPanel detail={detail} presence={presence} onViewSheet={setSheetId} />

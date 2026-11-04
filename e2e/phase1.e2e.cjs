@@ -112,14 +112,14 @@ async function shot(page, name) {
   await dm.getByLabel("Roll label").fill("Ambush check");
   await dm.getByLabel("Roll visibility").selectOption("dm_only");
   await dm.getByRole("button", { name: "Roll", exact: true }).click();
-  await dm.getByText("Mira the DM · Ambush check").waitFor();
+  await dm.locator("span", { hasText: "Mira the DM · Ambush check" }).first().waitFor(); // roll log (the dice overlay shows the same label)
 
   // Player public roll with advantage via dice tray
   await pl.getByLabel("Dice formula").fill("1d20+5");
   await pl.getByLabel("Roll label").fill("Perception");
   await pl.getByRole("radio", { name: "advantage", exact: true }).click();
   await pl.getByRole("button", { name: "Roll", exact: true }).click();
-  await dm.getByText("Bram · Perception").waitFor();
+  await dm.locator("span", { hasText: "Bram · Perception" }).first().waitFor();
   await pl.waitForTimeout(500);
   assert.equal(await pl.getByText("Ambush check").count(), 0, "DM-only roll leaked to player");
 

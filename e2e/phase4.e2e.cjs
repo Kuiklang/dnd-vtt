@@ -191,13 +191,28 @@ async function waitFor(fn, msg, timeout = 8000) {
   await pl.getByTestId("token-rolls").getByRole("button", { name: "Adv" }).click();
   await pl.getByTestId("roll-check-dex").click();
   await dm.getByText("Bram Ironfoot — Dexterity check").first().waitFor();
+  // Dice animation: tumbles, then lands on the server's total (DM and roller both see it).
+  await dm.getByTestId("dice-overlay").waitFor();
+  await dm.locator('[data-testid="dice-overlay"][data-phase="landed"]').waitFor();
+  const shownTotal = (await dm.getByTestId("dice-overlay-total").textContent()).trim();
+  const logged = (await call(dm, "GET", `/api/campaigns/${campaign.id}/rolls?limit=50`)).rolls.find((r) => r.label === "Bram Ironfoot — Dexterity check");
+  assert.equal(shownTotal, String(logged.total), "animation must land on the server's total");
+  assert.equal(logged.result.mode, "advantage");
+  await shot(dm, "p4-05-dice-overlay");
+  // Turning the animation off in the profile stops it.
+  await call(pl, "PATCH", "/api/me", { settings: { diceAnimation: false } });
+  await pl.reload();
+  await pl.getByTestId("map-canvas").waitFor();
+  await clickToken(pl, "Bram Ironfoot");
   await pl.getByTestId("token-rolls").getByRole("button", { name: "Saves" }).click();
   await pl.getByTestId("roll-save-con").click();
   await dm.getByText("Bram Ironfoot — Constitution save").first().waitFor();
+  await pl.waitForTimeout(300);
+  assert.equal(await pl.getByTestId("dice-overlay").count(), 0, "animation shown although turned off");
   await pl.getByTestId("roll-skill").selectOption({ index: 1 });
   await pl.getByTestId("open-sheet").click();
   await pl.getByRole("dialog").waitFor();
-  await shot(pl, "p4-05-player-sheet-from-token");
+  await shot(pl, "p4-06-player-sheet-from-token");
   await pl.keyboard.press("Escape");
   await pl.getByRole("dialog").getByRole("button", { name: "Close" }).click().catch(() => {});
 
