@@ -65,7 +65,7 @@
 | 6 Music | audio upload, playlist, ambient, realtime sync | ✅ เสร็จ |
 | 7 Advanced | spells/AoE, ส่งไอเทม, เพลงประจำฉาก, concentration, undo/redo, session recap, timeline ✅ · ย้ายไปทำทีหลัง: scene templates, drawing tools, custom layers | ✅ เสร็จ (2 รอบ) |
 | 8 Advanced features | dynamic lighting & vision (กำแพง/ประตู/แสง/darkvision), voice chat, AI ผู้ช่วย DM ผ่าน Claude Code ในเครื่อง | ✅ เสร็จ |
-| 9 Polish | UI polish, performance, security review, docs | |
+| 9 Polish | เล่นที่บ้านด้วยคำสั่งเดียว (ฐานข้อมูลในตัว), ไฟล์ .bat สำหรับ Windows, เล่นออนไลน์ผ่าน tunnel ฟรี, แยกโค้ดโหลดเร็วขึ้น, ตรวจความปลอดภัย, คู่มือ | ✅ เสร็จ |
 
 รายละเอียดแต่ละ phase: [docs/ROADMAP.md](docs/ROADMAP.md) · ความเสี่ยง: [docs/RISKS.md](docs/RISKS.md)
 
@@ -436,11 +436,48 @@ Error ที่พบและแก้:
 ข้อจำกัด: ไม่มีแสงสี/เงานุ่ม (แสงเป็นวงกลมตัดด้วยกำแพง), ไม่มีกำแพงแบบมองทะลุได้ทางเดียว/หน้าต่าง, voice แบบ mesh เหมาะกับโต๊ะไม่เกิน ~8 คน,
 AI ใช้ได้เฉพาะเมื่อ server รันบนคอมที่ล็อกอิน Claude Code ไว้
 
+### 2026-11-04 — Phase 9: พร้อมเล่นที่บ้าน + เล่นออนไลน์กับเพื่อน ✅
+
+**ติดตั้งและรันง่าย**
+- `pnpm play` / `start-windows.bat`: คำสั่งเดียวรันทุกอย่าง — เปิด PostgreSQL ในตัว (แพ็กเกจ `embedded-postgres`, เก็บที่ `data/db`, ฟังเฉพาะ localhost, รหัสผ่านสุ่มครั้งแรก),
+  รัน migration, เสิร์ฟเว็บที่ :3001, เปิดเบราว์เซอร์, แสดงลิงก์สำหรับเพื่อนใน Wi-Fi เดียวกัน, เช็กว่า Claude Code พร้อมไหม, ปิดฐานข้อมูลเรียบร้อยเมื่อกด Ctrl+C
+- `setup-windows.bat` (ติดตั้ง Node ผ่าน winget ถ้ายังไม่มี, pnpm, ส่วนประกอบ, build เว็บ, สร้าง `.env` จาก `.env.play.example` ที่เปิด AI แบบ Claude Code)
+- `play-online-windows.bat`: Cloudflare quick tunnel (ติดตั้ง cloudflared ให้) → ลิงก์ https ให้เพื่อน, voice ใช้ได้
+- Claude Code บน Windows: รองรับทั้ง `claude.exe` และ `claude.cmd` จาก npm (รันไฟล์ของแพ็กเกจตรงๆ ไม่ผ่าน shell)
+- คู่มือภาษาไทย [docs/PLAY_ONLINE.md](docs/PLAY_ONLINE.md)
+
+**ความปลอดภัย** (ตรวจทาน)
+- เล่นผ่าน tunnel: ตรวจ Origin เทียบ host โดยไม่สน http/https, เชื่อ `X-Forwarded-*` เฉพาะ proxy บนเครื่องเดียวกัน (rate limit แยกต่อเพื่อนแต่ละคน), cookie `Secure` อัตโนมัติเมื่อเข้าผ่าน https
+- `pnpm audit --prod`: ไม่พบช่องโหว่; ทั้งหมดพบ 1 ระดับกลางใน esbuild เก่าที่ติดมากับ `drizzle-kit` (เครื่องมือ dev สำหรับสร้าง migration ไม่ได้ใช้ตอนเล่น)
+- ทบทวนสิทธิ์ endpoint ใหม่ของ Phase 8: กำแพง/ประตู (map.manage, ประตูลับ/ล็อก), vision ของ token, voice (สมาชิกเท่านั้น, relay เฉพาะห้องเดียวกัน), AI (dmNotes.view) — มี test ครอบทุกข้อ
+- ฐานข้อมูลในตัวฟังเฉพาะ localhost; ข้อมูล DM-only ทั้งหมดยังกรองที่ server
+
+**ประสิทธิภาพ**: ทุกหน้า lazy load — ไฟล์แรกจาก 564KB เหลือ 332KB (gzip 103KB), ไม่มีคำเตือน chunk ใหญ่แล้ว
+
+| ชุดทดสอบ | ผล |
+| --- | --- |
+| `packages/rules` unit | 162/162 ✅ |
+| `apps/server` integration (+ tunnel: origin/secure cookie/XFF เฉพาะ localhost, + หา Claude Code บน Windows) | 79/79 ✅ |
+| `apps/web` unit | 12/12 ✅ |
+| `pnpm play` ด้วยฐานข้อมูลในตัว: เปิดครั้งแรก (สร้าง DB), ปิดด้วย Ctrl+C (Postgres หยุด), เปิดใหม่ข้อมูลยังอยู่ | ✅ |
+| E2E phase 1–8 ทั้งหมด รันกับ `pnpm play` (ฐานข้อมูลในตัว) | ✅ |
+
+Error ที่พบและแก้:
+- `pnpm home` ชนกับคำสั่งในตัวของ pnpm (เปิดหน้าเอกสาร) → เปลี่ยนชื่อเป็น `pnpm play`
+- Prettier จัดรูปแบบทั้งไฟล์ผิดสไตล์ของ repo → ย้อนแล้วแก้เฉพาะส่วน
+- embedded-postgres เวอร์ชันล่าสุดเพิ่งออก 5 วัน → เลือก 17.10.0-beta.17 (ออก มิ.ย. 2026) เพื่อความปลอดภัยของ supply chain
+
+ข้อจำกัด: ทดสอบสคริปต์ .bat บน Windows จริงไม่ได้ในสภาพแวดล้อมนี้ (ทดสอบตัว launcher บน Linux แล้ว; ไฟล์ .bat เป็นแค่ตัวเรียก);
+ลิงก์ trycloudflare เปลี่ยนทุกครั้งที่เปิด; voice ผ่านลิงก์ http (Wi-Fi/Tailscale แบบไม่ Funnel) ใช้ไมค์ไม่ได้เพราะเบราว์เซอร์บังคับ https
+
 ---
 
 ## 5. วิธีรันและทดสอบ
 
-ดู [README.md](README.md) — สรุป:
+**เล่นจริง (Windows):** `setup-windows.bat` ครั้งแรก → `start-windows.bat` ทุกครั้ง → `play-online-windows.bat` เพื่อชวนเพื่อน ([คู่มือ](docs/PLAY_ONLINE.md))
+**Mac/Linux:** `pnpm setup:play` แล้ว `pnpm play`
+
+สำหรับพัฒนา ดู [README.md](README.md) — สรุป:
 
 ```bash
 pnpm install

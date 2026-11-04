@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { HttpError } from "../lib/errors.js";
 
 /**
@@ -31,10 +33,44 @@ export function cliError(text: string): HttpError {
   return new HttpError(502, "ai_failed", "Claude Code couldn't answer. Please try again.");
 }
 
+/**
+ * On Windows, `claude` may be `claude.exe` (native installer) or an npm `claude.cmd` shim.
+ * Node can't start a .cmd without a shell, and a shell would re-parse our arguments, so for
+ * the shim we run the package's own entry file directly. Elsewhere the command is used as is.
+ */
+export function resolveClaudeCommand(command: string, platform: string = process.platform, env: NodeJS.ProcessEnv = process.env): { file: string; prefixArgs: string[] } {
+  if (platform !== "win32") return { file: command, prefixArgs: [] };
+  const hasDir = /[\\/]/.test(command);
+  const dirs = hasDir ? [""] : (env.PATH ?? env.Path ?? "").split(";").filter(Boolean);
+  const exts = path.extname(command) ? [""] : [".exe", ".cmd"];
+  for (const ext of exts)
+    for (const dir of dirs) {
+      const file = dir ? path.join(dir, command + ext) : command + ext;
+      if (!existsSync(file)) continue;
+      if (!file.toLowerCase().endsWith(".cmd")) return { file, prefixArgs: [] };
+      const pkgDir = path.join(path.dirname(file), "node_modules", "@anthropic-ai", "claude-code");
+      try {
+        const pkg = JSON.parse(readFileSync(path.join(pkgDir, "package.json"), "utf8")) as { bin?: string | Record<string, string> };
+        const bin = typeof pkg.bin === "string" ? pkg.bin : pkg.bin?.claude;
+        if (bin) {
+          const target = path.join(pkgDir, bin);
+          return /\.(c|m)?js$/i.test(target) ? { file: process.execPath, prefixArgs: [target] } : { file: target, prefixArgs: [] };
+        }
+      } catch {
+        /* not the npm package layout; fall through */
+      }
+    }
+  return { file: command, prefixArgs: [] };
+}
+
+const resolved = new Map<string, { file: string; prefixArgs: string[] }>();
+
 export function runClaudeCli(opts: ClaudeCliOptions, args: string[], cwd: string, prompt: string): Promise<ClaudeCliResult> {
   const fullArgs = ["-p", "--output-format", "json", "--strict-mcp-config", "--disable-slash-commands", "--no-session-persistence", ...args, ...(opts.model ? ["--model", opts.model] : [])];
   return new Promise<string>((resolve, reject) => {
-    const child = spawn(opts.command, fullArgs, { cwd, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+    let cmd = resolved.get(opts.command);
+    if (!cmd) resolved.set(opts.command, (cmd = resolveClaudeCommand(opts.command)));
+    const child = spawn(cmd.file, [...cmd.prefixArgs, ...fullArgs], { cwd, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => {

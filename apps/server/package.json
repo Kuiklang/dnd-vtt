@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts"
+    "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
+    "play": "tsx --env-file-if-exists=.env src/local.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.4.0",
@@ -20,6 +21,7 @@
     "@fastify/static": "^10.1.8",
     "@vtt/rules": "workspace:*",
     "drizzle-orm": "^0.45.4",
+    "embedded-postgres": "17.10.0-beta.17",
     "fastify": "^5.12.8",
     "image-size": "^2.0.4",
     "pg": "^8.23.1",

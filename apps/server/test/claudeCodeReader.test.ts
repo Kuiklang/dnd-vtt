@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { emptyExtractedSheet } from "@vtt/rules";
 import { ClaudeCodeSheetExtractor, parseResult } from "../src/import/claudeCode.js";
+import { resolveClaudeCommand } from "../src/ai/claudeCli.js";
+import { mkdir } from "node:fs/promises";
 import { extractorFromConfig } from "../src/import/provider.js";
 import { pngBytes, registerUser, setupApp, upload } from "./helpers.js";
 
@@ -96,5 +98,25 @@ describe("sheet reader using Claude Code on this computer", () => {
     } finally {
       await ctx.close();
     }
+  });
+});
+
+describe("finding Claude Code on Windows", () => {
+  it("uses claude.exe, or runs the npm package's entry file instead of the .cmd shim", async () => {
+    const base = await mkdtemp(join(tmpdir(), "win-path-"));
+    const exeDir = join(base, "native");
+    const npmDir = join(base, "npm");
+    const pkg = join(npmDir, "node_modules", "@anthropic-ai", "claude-code");
+    await mkdir(exeDir, { recursive: true });
+    await mkdir(pkg, { recursive: true });
+    await writeFile(join(npmDir, "claude.cmd"), "@echo off");
+    await writeFile(join(pkg, "package.json"), JSON.stringify({ bin: { claude: "cli.js" } }));
+    const npm = resolveClaudeCommand("claude", "win32", { PATH: `${npmDir};C:\\nowhere` });
+    expect(npm).toEqual({ file: process.execPath, prefixArgs: [join(pkg, "cli.js")] });
+    await writeFile(join(exeDir, "claude.exe"), "");
+    expect(resolveClaudeCommand("claude", "win32", { PATH: `${exeDir};${npmDir}` })).toEqual({ file: join(exeDir, "claude.exe"), prefixArgs: [] });
+    expect(resolveClaudeCommand("claude", "linux", {})).toEqual({ file: "claude", prefixArgs: [] });
+    expect(resolveClaudeCommand("claude", "win32", { PATH: "" })).toEqual({ file: "claude", prefixArgs: [] });
+    await rm(base, { recursive: true, force: true });
   });
 });

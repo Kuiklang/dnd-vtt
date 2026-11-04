@@ -159,6 +159,17 @@
 - [ ] จำพื้นที่ที่เคยเห็นแล้ว (explored fog)
 - [ ] Push-to-talk, voice แบบ SFU สำหรับโต๊ะใหญ่
 
-## Phase 9
+## Phase 9 — Polish + พร้อมเล่น ✅
 
-ดู [docs/ROADMAP.md](docs/ROADMAP.md)
+- [x] `pnpm play` / `start-windows.bat`: ฐานข้อมูลในตัว (ไม่ต้องติดตั้ง Postgres), migration, เสิร์ฟเว็บ, เปิดเบราว์เซอร์
+- [x] `setup-windows.bat`, `play-online-windows.bat` (Cloudflare quick tunnel), `.env.play.example`
+- [x] รองรับ tunnel: origin/secure cookie/X-Forwarded-* จาก localhost
+- [x] Claude Code บน Windows (`claude.exe` และ npm `claude.cmd`)
+- [x] Lazy load ทุกหน้า (ไฟล์แรก 564KB → 332KB)
+- [x] Security review: audit dependencies, ทบทวนสิทธิ์ endpoint ใหม่
+- [x] คู่มือภาษาไทย `docs/PLAY_ONLINE.md`
+- [ ] ทดสอบไฟล์ .bat บน Windows จริง (ผู้ใช้ทดลองเอง — ทดสอบ launcher บน Linux แล้ว)
+- [ ] ลิงก์ออนไลน์แบบถาวร (Cloudflare named tunnel + โดเมน) — ต้องมีบัญชี/โดเมนของผู้ใช้
+- [ ] แปลภาษาไทยหน้าที่เหลือ (Lobby, Dashboard, Character sheet) — ดูหัวข้อ i18n ด้านบน
+- [ ] Accessibility pass (keyboard บน canvas, screen reader)
+- [ ] สำรองข้อมูลอัตโนมัติ (ตอนนี้ copy โฟลเดอร์ `data` เอง)

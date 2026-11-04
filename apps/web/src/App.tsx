@@ -3,12 +3,13 @@ import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate 
 import { useAuth } from "./stores/auth";
 import { Button, Loading, Toaster } from "./components/ui";
 import { AuthPage } from "./pages/AuthPage";
-import { DashboardPage } from "./pages/DashboardPage";
-import { CreateCampaignPage } from "./pages/CreateCampaignPage";
-import { JoinPage } from "./pages/JoinPage";
-import { LobbyPage } from "./features/lobby/LobbyPage";
-import { CharacterPage } from "./features/character/CharacterPage";
-import { ProfilePage } from "./pages/ProfilePage";
+// Each page loads when first opened, so the login screen appears fast.
+const DashboardPage = lazy(() => import("./pages/DashboardPage").then((m) => ({ default: m.DashboardPage })));
+const CreateCampaignPage = lazy(() => import("./pages/CreateCampaignPage").then((m) => ({ default: m.CreateCampaignPage })));
+const JoinPage = lazy(() => import("./pages/JoinPage").then((m) => ({ default: m.JoinPage })));
+const LobbyPage = lazy(() => import("./features/lobby/LobbyPage").then((m) => ({ default: m.LobbyPage })));
+const CharacterPage = lazy(() => import("./features/character/CharacterPage").then((m) => ({ default: m.CharacterPage })));
+const ProfilePage = lazy(() => import("./pages/ProfilePage").then((m) => ({ default: m.ProfilePage })));
 // The table pulls in the canvas engine; load it only when a player opens the map.
 const TablePage = lazy(() => import("./features/table/TablePage").then((m) => ({ default: m.TablePage })));
 const ImportSheetPage = lazy(() => import("./features/character/ImportSheetPage").then((m) => ({ default: m.ImportSheetPage })));
@@ -100,19 +101,21 @@ export function App() {
       <div className="flex min-h-full flex-col">
         <TopBar />
         <main className="flex-1">
+          <Suspense fallback={<Loading />}>
           <Routes>
             <Route path="/login" element={<AuthPage />} />
             <Route path="/join/:code" element={<RequireAuth><JoinPage /></RequireAuth>} />
             <Route path="/" element={<RequireAuth><DashboardPage /></RequireAuth>} />
             <Route path="/campaigns/new" element={<RequireAuth><CreateCampaignPage /></RequireAuth>} />
             <Route path="/campaigns/:id" element={<RequireAuth><LobbyPage /></RequireAuth>} />
-            <Route path="/campaigns/:id/table" element={<RequireAuth><Suspense fallback={<Loading />}><TablePage /></Suspense></RequireAuth>} />
-            <Route path="/characters/new" element={<RequireAuth><Suspense fallback={<Loading />}><CreateCharacterPage /></Suspense></RequireAuth>} />
-            <Route path="/characters/import" element={<RequireAuth><Suspense fallback={<Loading />}><ImportSheetPage /></Suspense></RequireAuth>} />
+            <Route path="/campaigns/:id/table" element={<RequireAuth><TablePage /></RequireAuth>} />
+            <Route path="/characters/new" element={<RequireAuth><CreateCharacterPage /></RequireAuth>} />
+            <Route path="/characters/import" element={<RequireAuth><ImportSheetPage /></RequireAuth>} />
             <Route path="/characters/:id" element={<RequireAuth><CharacterPage /></RequireAuth>} />
             <Route path="/profile" element={<RequireAuth><ProfilePage /></RequireAuth>} />
             <Route path="*" element={<div className="p-10 text-center text-parchment-400">Page not found. <Link className="text-gold-400 underline" to="/">Go home</Link></div>} />
           </Routes>
+          </Suspense>
         </main>
         <Toaster />
       </div>

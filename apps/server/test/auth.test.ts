@@ -56,6 +56,34 @@ describe("authentication", () => {
     expect(res.statusCode).toBe(403);
   });
 
+  it("works through a tunnel on this computer: https origin, secure cookie", async () => {
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: "/api/auth/guest",
+      remoteAddress: "127.0.0.1",
+      headers: {
+        host: "table.trycloudflare.com",
+        origin: "https://table.trycloudflare.com",
+        "x-forwarded-proto": "https",
+        "x-forwarded-for": "203.0.113.9",
+        "content-type": "application/json",
+      },
+      payload: JSON.stringify({ displayName: "Tunnel friend" }),
+    });
+    expect(res.statusCode).toBe(201);
+    expect(String(res.headers["set-cookie"])).toMatch(/; Secure/);
+    // A forwarded header from anywhere but this computer isn't trusted.
+    const direct = await ctx.app.inject({
+      method: "POST",
+      url: "/api/auth/guest",
+      remoteAddress: "198.51.100.7",
+      headers: { "x-forwarded-proto": "https", "content-type": "application/json" },
+      payload: JSON.stringify({ displayName: "LAN friend" }),
+    });
+    expect(direct.statusCode).toBe(201);
+    expect(String(direct.headers["set-cookie"])).not.toMatch(/Secure/);
+  });
+
   it("supports guests with limits and upgrade to a full account", async () => {
     const g = new Client(ctx.app);
     const res = await g.post("/api/auth/guest", { displayName: "Wanderer" });

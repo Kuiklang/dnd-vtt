@@ -3,3 +3,9 @@ packages:
   - "apps/*"
 onlyBuiltDependencies:
   - esbuild
+  # Postgres binaries for the one-click local setup (re-creates symlinks inside the package).
+  - "@embedded-postgres/linux-x64"
+  - "@embedded-postgres/linux-arm64"
+  - "@embedded-postgres/darwin-x64"
+  - "@embedded-postgres/darwin-arm64"
+  - "@embedded-postgres/windows-x64"
