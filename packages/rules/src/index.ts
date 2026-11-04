@@ -17,3 +17,4 @@ export * from "./combat/damage.js";
 export * from "./combat/tracker.js";
 export * from "./character/importSheet.js";
 export * from "./character/srd2014.js";
+export * from "./bestiary/srd2014.js";

@@ -5,8 +5,8 @@
 
 ## รอการตัดสินใจ / ข้อมูลจากผู้ใช้
 
-- [ ] สร้าง GitHub repo ว่าง (`dnd-vtt`) แล้วแจ้งชื่อ → push ประวัติ commit ทั้งหมด
-- [ ] ยืนยันใช้ Drizzle ต่อ (แทน Prisma ตามแผนเดิม)
+- [x] สร้าง GitHub repo `Kuiklang/dnd-vtt` → push ประวัติทั้งหมดแล้ว (2026-11-04)
+- [x] ยืนยันใช้ Drizzle ต่อ (ผู้ใช้เลือก "Keep Drizzle" 2026-11-04)
 - [ ] Google OAuth client id/secret (ถ้าต้องการ Google Login)
 - [ ] เลือก hosting + object storage (ตอนใกล้ MVP)
 
@@ -84,6 +84,26 @@
 - [ ] Back คืน condition ที่หมดอายุ (เก็บ history ต่อ turn)
 - [ ] Concentration check อัตโนมัติเมื่อรับดาเมจ
 
-## Phase 5–9
+## Phase 5 — DM Toolkit ✅
+
+- [x] Bestiary SRD 5.1: 30 stat block (ตรวจอัตโนมัติ: HP = ค่าเฉลี่ย hit dice, XP ตรง CR, save/skill ตรง proficiency), ค้นหาชื่อ/ประเภท/CR
+- [x] วาง monster ลงแผนที่ (จำนวน, HP เฉลี่ยหรือทอยแยก, ซ่อน), HP แยกต่อ token, ขนาดตาม size
+- [x] Stat block บน token (DM เท่านั้น) + ทอย check/attack/damage แบบ DM-only; ลิงก์ stat block ไม่ถูกส่งให้ผู้เล่น
+- [x] คัดลอก stat block เข้าแคมเปญเป็นชีต monster ที่แก้ได้ (ค่าที่พิมพ์ตรงกับที่คำนวณ)
+- [x] Encounter builder: บันทึก/แก้/ลบ, XP รวม + ต่อผู้เล่น, วางลงแผนที่แบบซ่อน + เริ่ม combat ทันที
+- [x] Journal (Markdown ปลอดภัย, โฟลเดอร์, ปักหมุด, ค้นหา) สิทธิ์ 4 แบบ: DM เท่านั้น / ทุกคน / ผู้เล่นที่เลือก / ส่วนตัว
+- [x] Realtime journal ต่อผู้รับ (upsert/remove เฉพาะคนที่มีสิทธิ์), optimistic versioning
+- [x] Handout: แนบรูป, กด "แสดง" ให้ทุกคนหรือคนที่เลือก → เด้งขึ้นจอผู้เล่น; รูป handout โหลดไม่ได้จนกว่าจะแชร์
+- [x] Random tables: ตรวจช่วงไม่ซ้อน/อยู่ในช่วงลูกเต๋า, ทอยที่ server ลง dice log (DM-only หรือเปิดเผย)
+- [x] DM Screen: DC ทั่วไป, cover, conditions ตาม ruleset, action ในการต่อสู้, ทอยลับ
+- [x] Journal / DM Toolkit เปิดได้ทั้งในล็อบบี้และบนโต๊ะ; Esc ปิด dialog ได้ทุกที่
+- [x] Tests: unit (bestiary data, conversions, table text), integration (journal visibility + realtime, handout image access, encounters, tables, stat block link), E2E `e2e/phase5.e2e.cjs`
+- [ ] ระดับความยากของ encounter (ตาราง XP threshold อยู่ใน DMG ไม่ใช่ SRD — ต้องให้ DM ใส่งบเอง หรือหาแหล่งเปิด)
+- [ ] Bestiary เพิ่มเติม (SRD มี ~300 ตัว; ตอนนี้ 30 ตัวที่ใช้บ่อย) + import stat block จาก JSON
+- [ ] Custom rulesets UI (engine รองรับ homebrew overrides แล้ว ยังไม่มีหน้าแก้)
+- [ ] Journal: ลากจัดลำดับ, ลิงก์ระหว่าง entry, ประวัติการแก้ไข
+- [ ] Random table ซ้อนกัน (entry เรียกตารางอื่น)
+
+## Phase 6–9
 
 ดู [docs/ROADMAP.md](docs/ROADMAP.md)

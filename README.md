@@ -29,7 +29,8 @@
 | Fog of War แบบ manual (rect/circle/polygon, กรอง token ที่ server) + วัดระยะตาม ruleset | ✅ |
 | UI ไทย / อังกฤษ | ✅ framework + หน้าโต๊ะ, หน้าอื่นกำลังแปล |
 | Combat: initiative, turns/rounds, HP/damage/resistances, conditions, action economy | ✅ Phase 4 |
-| Music / DM Toolkit / Dynamic lighting | ⏳ Phase 5–8 (ดู [docs/ROADMAP.md](docs/ROADMAP.md)) |
+| DM Toolkit: bestiary SRD, encounter builder, journal + handouts, random tables, DM screen | ✅ Phase 5 |
+| Music / Advanced / Dynamic lighting | ⏳ Phase 6–8 (ดู [docs/ROADMAP.md](docs/ROADMAP.md)) |
 
 ## Tech stack
 
@@ -76,6 +77,7 @@ BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase1.e2e.cjs
 BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase2.e2e.cjs   # map/token/fog, DM + ผู้เล่น
 BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase3.e2e.cjs   # import ชีต + character creator
 BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase4.e2e.cjs   # combat + dice animation
+BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase5.e2e.cjs   # DM toolkit
 ```
 
 `TEST_DATABASE_URL` ใช้กำหนด DB สำหรับ integration test (ค่าเริ่มต้น `postgres://postgres@localhost:5432/vtt_test` — **ถูกล้างทุกครั้งที่รัน**)

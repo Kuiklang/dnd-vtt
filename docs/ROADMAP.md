@@ -21,8 +21,8 @@ MVP = สิ่งที่กลุ่มหนึ่งใช้เล่น�
 | 2 Core VTT | map canvas (Konva), upload map (asset storage), token + placement, grid (square/hex), manual fog, multiplayer state sync, save system | ✅ เสร็จ (ดู PROJECT_PLAN.md) |
 | 3 Character & Dice | character creator wizard, 3D/2D dice animation + sound, character import (PDF/image → OCR/AI → review), token linking, ability checks จาก token | ✅ เสร็จ (2D dice; import ผ่าน Claude API) |
 | 4 Combat (ดึงมาก่อน Phase 3 เพื่อปิด MVP) | combat mode, initiative tracker, turn/round, HP/damage (resistance/vulnerability/immunity), healing, conditions + duration, combat HUD, action economy | ✅ |
-| 5 DM Toolkit | NPC/Monster library (SRD), encounter builder, journal (Markdown), handouts, DM Screen (panels), random tables, custom rulesets UI | ⏭ ถัดไป |
-| 6 Music | audio upload, playlists, ambient layers, realtime sync (DM controls, player local volume) | |
+| 5 DM Toolkit | NPC/Monster library (SRD), encounter builder, journal (Markdown), handouts, DM Screen (panels), random tables, custom rulesets UI | ✅ เสร็จ (ยกเว้น custom rulesets UI และระดับความยาก encounter) |
+| 6 Music | audio upload, playlists, ambient layers, realtime sync (DM controls, player local volume) | ⏭ ถัดไป |
 | 7 Advanced | spell library + casting + AoE templates, inventory transfer, measurement, scene templates & switching, undo/redo, session recap, timeline | |
 | 8 Advanced features | dynamic lighting & vision, voice chat (WebRTC, optional), AI DM assistant | |
 | 9 Polish | UI polish, performance, security review, docs, accessibility | |
@@ -45,7 +45,7 @@ MVP = สิ่งที่กลุ่มหนึ่งใช้เล่น�
 - Google login (ต้องมี OAuth client) — ระบบ session รองรับการเพิ่ม provider แล้ว
 - Upload รูป avatar/portrait/cover — ใช้ https URL ไปก่อน; asset storage มาพร้อม Phase 2
 - Default map / default music ของแคมเปญ — รอ Phase 2 / 6
-- NPC/Monster UI — API รองรับแล้ว (`kind: npc|monster`, `player_visible`) แต่ UI library อยู่ใน Phase 5
+- NPC/Monster UI — ทำแล้วใน Phase 5 (bestiary + คัดลอกเข้าแคมเปญ)
 
 ## Phase 2 — แผนงานถัดไป (ลำดับที่แนะนำ)
 

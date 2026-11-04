@@ -4,7 +4,7 @@ import type { AssetDto } from "../features/table/types";
 export const IMAGE_ACCEPT = "image/png,image/jpeg,image/webp,image/gif";
 
 /** Uploads an image through the server's multipart endpoint (server validates type/size). */
-export async function uploadImage(file: File, kind: "map" | "token" | "portrait", campaignId: string | null): Promise<AssetDto> {
+export async function uploadImage(file: File, kind: "map" | "token" | "portrait" | "handout", campaignId: string | null): Promise<AssetDto> {
   const form = new FormData();
   form.append("kind", kind);
   if (campaignId) form.append("campaignId", campaignId);

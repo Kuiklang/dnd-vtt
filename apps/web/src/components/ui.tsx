@@ -1,4 +1,4 @@
-import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import { forwardRef, useEffect, useRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import { useToasts } from "../stores/toast";
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
@@ -160,13 +160,21 @@ export function Toaster() {
 }
 
 export function Modal({ open, onClose, title, children, wide }: { open: boolean; onClose: () => void; title: string; children: ReactNode; wide?: boolean }) {
+  // Escape closes the dialog wherever focus is (not only inside it).
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeRef.current();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/70 p-4 pt-16" onMouseDown={onClose} role="dialog" aria-modal aria-label={title}>
       <div
         className={cx("w-full rounded-xl border border-ink-600 bg-ink-850 shadow-2xl", wide ? "max-w-5xl" : "max-w-lg")}
         onMouseDown={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.key === "Escape" && onClose()}
       >
         <header className="flex items-center justify-between border-b border-ink-700 px-5 py-3">
           <h2 className="text-lg text-parchment-50">{title}</h2>

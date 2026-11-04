@@ -18,6 +18,10 @@ import { useCombat } from "./useCombat";
 import { CombatPanel } from "./CombatPanel";
 import { DiceOverlay } from "../dice/DiceOverlay";
 import type { FogShapeKind, Tool } from "./types";
+import type { TokenInput } from "./useTable";
+import { DmToolkit, type ToolkitTab } from "../dmtools/DmToolkit";
+import { HandoutPopup } from "../dmtools/HandoutPopup";
+import { useJournal } from "../dmtools/useJournal";
 
 export function TablePage() {
   const { id = "" } = useParams();
@@ -115,29 +119,74 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
     [table],
   );
   const onMoveToken = useCallback((id: string, x: number, y: number) => void table.updateToken(id, { x, y }), [table]);
-  const dropPoint = useCallback(() => {
-    const c = canvasRef.current?.viewCenter() ?? { x: 100, y: 100 };
-    const s = table.scene;
-    if (!s) return c;
-    const clamp = (p: { x: number; y: number }) => ({ x: Math.min(Math.max(p.x, 0), s.width), y: Math.min(Math.max(p.y, 0), s.height) });
-    // Don't stack a new token on top of an existing one: walk outwards cell by cell to a free spot.
-    const step = s.grid.size;
-    const taken = (p: { x: number; y: number }) => [...table.tokens.values()].some((tk) => Math.hypot(tk.x - p.x, tk.y - p.y) < step * 0.5);
-    for (let ring = 0; ring < 6; ring++) {
-      for (let dx = -ring; dx <= ring; dx++) {
-        for (let dy = -ring; dy <= ring; dy++) {
-          if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
-          const p = clamp({ x: c.x + dx * step, y: c.y + dy * step });
-          if (!taken(p)) return p;
+  /** `n` free grid points near the view centre, so new tokens don't stack on existing ones or each other. */
+  const dropPoints = useCallback(
+    (n: number) => {
+      const c = canvasRef.current?.viewCenter() ?? { x: 100, y: 100 };
+      const s = table.scene;
+      if (!s) return Array.from({ length: n }, () => c);
+      const clamp = (p: { x: number; y: number }) => ({ x: Math.min(Math.max(p.x, 0), s.width), y: Math.min(Math.max(p.y, 0), s.height) });
+      const step = s.grid.size;
+      const used = [...table.tokens.values()].map((tk) => ({ x: tk.x, y: tk.y }));
+      const taken = (p: { x: number; y: number }) => used.some((u) => Math.hypot(u.x - p.x, u.y - p.y) < step * 0.5);
+      const out: Array<{ x: number; y: number }> = [];
+      for (let ring = 0; ring < 12 && out.length < n; ring++) {
+        for (let dx = -ring; dx <= ring && out.length < n; dx++) {
+          for (let dy = -ring; dy <= ring && out.length < n; dy++) {
+            if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue;
+            const p = clamp({ x: c.x + dx * step, y: c.y + dy * step });
+            if (!taken(p)) {
+              out.push(p);
+              used.push(p);
+            }
+          }
         }
       }
-    }
-    return clamp(c);
-  }, [table.scene, table.tokens]);
+      while (out.length < n) out.push(clamp(c));
+      return out;
+    },
+    [table.scene, table.tokens],
+  );
+  const dropPoint = useCallback(() => dropPoints(1)[0]!, [dropPoints]);
+
+  // ---- DM toolkit / journal ----
+  const journal = useJournal(detail.campaign.id);
+  const [toolkit, setToolkit] = useState<{ open: boolean; tab: ToolkitTab }>({ open: false, tab: "journal" });
+  const placeMany = useCallback(
+    async (list: TokenInput[]) => {
+      const points = dropPoints(list.length);
+      const ids: string[] = [];
+      for (const [i, tk] of list.entries()) ids.push((await table.createToken({ ...tk, ...points[i]! })).id);
+      if (ids[0]) setSelectedId(ids[0]);
+      return ids;
+    },
+    [dropPoints, table],
+  );
+  const fight = useCallback(
+    async (ids: string[]) => {
+      if (!table.sceneId) return;
+      if (combat.combat) await combat.addTokens(ids);
+      else await combat.start(table.sceneId, ids);
+    },
+    [combat, table.sceneId],
+  );
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] flex-col">
       <DiceOverlay roll={lobby.lastRoll} />
+      <HandoutPopup campaignId={detail.campaign.id} />
+      <DmToolkit
+        open={toolkit.open}
+        onClose={() => setToolkit((s) => ({ ...s, open: false }))}
+        tab={toolkit.tab}
+        onTab={(tab) => setToolkit({ open: true, tab })}
+        detail={detail}
+        journal={journal}
+        ruleset={ruleset ?? null}
+        onRoll={lobby.roll}
+        onPlace={isGM && table.scene ? placeMany : undefined}
+        onFight={caps.has("combat.manage") && table.scene ? fight : undefined}
+      />
       {/* Top toolbar */}
       <div className="flex flex-wrap items-center gap-2 border-b border-ink-700 bg-ink-900/90 px-3 py-1.5 text-sm">
         <Link to={`/campaigns/${detail.campaign.id}`} className="rounded px-2 py-1 text-parchment-400 hover:bg-ink-800">
@@ -161,6 +210,11 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
           </>
         )}
         <ToolButton active={false} onClick={() => canvasRef.current?.fit()} label={t("tool.fit")} icon="⤢" />
+        <div className="mx-2 h-5 w-px bg-ink-700" />
+        <ToolButton active={toolkit.open && toolkit.tab === "journal"} onClick={() => setToolkit({ open: true, tab: "journal" })} label={t("toolkit.journal")} icon="📖" testId="open-journal" />
+        {caps.has("npc.manage") && (
+          <ToolButton active={toolkit.open && toolkit.tab !== "journal"} onClick={() => setToolkit((s) => ({ open: true, tab: s.tab === "journal" ? "bestiary" : s.tab }))} label={t("toolkit.title")} icon="🧰" testId="open-toolkit" />
+        )}
         <div className="ml-auto flex items-center gap-3">
           <SaveIndicator status={table.save} offline={lobby.connection !== "connected"} />
           <ConnectionDot connection={lobby.connection} />

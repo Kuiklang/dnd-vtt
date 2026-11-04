@@ -15,6 +15,10 @@ interface Props {
   /** The viewer's own active character: rolls are attributed to it in the log. */
   myCharacterId: string | null;
   onRoll(req: RollRequest): Promise<unknown>;
+  /** Monster/NPC stat blocks roll DM-only so players don't see their numbers. */
+  visibility?: RollRequest["visibility"];
+  /** Label prefix (defaults to the sheet's name; tokens like "Goblin 2" pass their own). */
+  label?: string;
 }
 
 const d20 = (bonus: number) => (bonus === 0 ? "1d20" : `1d20${bonus > 0 ? "+" : ""}${bonus}`);
@@ -24,7 +28,7 @@ const d20 = (bonus: number) => (bonus === 0 ? "1d20" : `1d20${bonus > 0 ? "+" : 
  * skills, initiative and attacks, using the same derived numbers as the sheet. Rolls are
  * made on the server and posted to the dice log like any other roll.
  */
-export function TokenRolls({ characterId, tick, myCharacterId, onRoll }: Props) {
+export function TokenRolls({ characterId, tick, myCharacterId, onRoll, visibility, label: who }: Props) {
   const t = useT();
   const [character, setCharacter] = useState<CharacterFull | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +57,7 @@ export function TokenRolls({ characterId, tick, myCharacterId, onRoll }: Props) 
 
   const roll = (formula: string, label: string, rollType: string, useMode = true, extra: RollMode = "normal") => {
     const m = useMode ? (extra !== "normal" && mode === "normal" ? extra : mode) : "normal";
-    onRoll({ formula, label: `${character.name} — ${label}`, rollType, mode: m, characterId: characterId === myCharacterId ? characterId : null }).catch((e) =>
+    onRoll({ formula, label: `${who ?? character.name} — ${label}`, rollType, mode: m, visibility, characterId: characterId === myCharacterId ? characterId : null }).catch((e) =>
       toast.error(errorMessage(e)),
     );
   };

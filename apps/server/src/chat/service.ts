@@ -250,6 +250,8 @@ export class ChatService {
       label: string;
       rollType: string;
       characterId?: string | null;
+      /** Builds the label from the result (random tables put the picked entry in the label). */
+      labelFor?: (result: RollResult) => string;
     },
   ): Promise<Required<Omit<RollDto, "redacted">>> {
     if (!m.caps.has("dice.roll")) throw forbidden("Your role can't roll dice");
@@ -279,7 +281,7 @@ export class ChatService {
         characterId,
         gameSessionId: session?.id ?? null,
         formula: result.normalized,
-        label: input.label,
+        label: input.labelFor ? input.labelFor(result) : input.label,
         rollType: input.rollType,
         visibility: input.visibility,
         recipientIds,

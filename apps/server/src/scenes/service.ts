@@ -23,7 +23,7 @@ import {
   type TokenViewer,
 } from "@vtt/rules";
 import type { Db } from "../db/client.js";
-import { campaigns, characters, fogOps, scenes, tokens, type SceneRow, type TokenRow, type TokenStats } from "../db/schema.js";
+import { campaigns, characters, fogOps, scenes, tokens, type SceneRow, type StatBlockRef, type TokenRow, type TokenStats } from "../db/schema.js";
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors.js";
 import type { CampaignService, Membership } from "../campaigns/service.js";
 import { assetUrl, type AssetService } from "../assets/service.js";
@@ -69,6 +69,8 @@ export interface TokenDto extends TokenState {
   vitals: TokenVitals | null;
   /** True when vitals exist but were withheld from this viewer. */
   vitalsHidden: boolean;
+  /** GM-only: the stat block this token was placed from (null for players). */
+  statBlock: StatBlockRef | null;
 }
 
 export interface LinkedCharacter {
@@ -92,8 +94,10 @@ export function vitalsOf(t: TokenRow, character: LinkedCharacter | null): TokenV
 
 /** Copy of a token as one viewer may see it (vitals withheld per hpVisibility). */
 export function redactToken(t: TokenDto, viewer: TokenViewer): TokenDto {
-  if (!t.vitals || canSeeTokenVitals(t, viewer)) return t;
-  return { ...t, vitals: null, vitalsHidden: true };
+  // Which stat block a token uses is DM knowledge (it can reveal a disguised creature).
+  const base = viewer.isGameMaster || !t.statBlock ? t : { ...t, statBlock: null };
+  if (!base.vitals || canSeeTokenVitals(base, viewer)) return base;
+  return { ...base, vitals: null, vitalsHidden: true };
 }
 
 export interface FogOpDto {
@@ -187,6 +191,7 @@ export function toTokenDto(t: TokenRow, character: LinkedCharacter | null = null
     version: t.version,
     vitals: vitalsOf(t, character),
     vitalsHidden: false,
+    statBlock: t.stats?.statBlock ?? null,
   };
 }
 
@@ -526,6 +531,10 @@ export class SceneService {
     if (patch.x !== undefined) values.x = clampCoord(patch.x, scene.width);
     if (patch.y !== undefined) values.y = clampCoord(patch.y, scene.height);
     if (patch.ownerIds) values.ownerIds = [...new Set(patch.ownerIds)];
+    // Editing AC/HP sends stats without the stat block link; keep the link unless it is set explicitly.
+    if (patch.stats && patch.stats.statBlock === undefined && current.stats?.statBlock) {
+      values.stats = { ...patch.stats, statBlock: current.stats.statBlock };
+    }
     const [row] = await this.db
       .update(tokens)
       .set({ ...values, version: sql`${tokens.version} + 1`, updatedAt: new Date() })

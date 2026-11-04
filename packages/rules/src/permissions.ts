@@ -34,6 +34,10 @@ export const CAPABILITIES = [
   "music.control",
   "handout.send",
   "dmNotes.view",
+  /** Read and write every journal entry, including DM-only ones (Phase 5). */
+  "journal.manage",
+  /** Create, edit and roll campaign random tables (Phase 5). */
+  "tables.manage",
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
@@ -75,6 +79,7 @@ const DM_ONLY: ReadonlySet<Capability> = new Set<Capability>([
   "npc.manage",
   "fog.manage",
   "dmNotes.view",
+  "journal.manage",
 ]);
 
 export function resolveCapabilities(role: CampaignRole, overrides?: PermissionOverrides): Set<Capability> {
