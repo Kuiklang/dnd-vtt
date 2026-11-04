@@ -21,7 +21,8 @@
 | Game session: start / pause / resume / end + history | ✅ |
 | Character: library, sheet ครบ, คำนวณอัตโนมัติ, overrides, autosave, optimistic locking, duplicate, JSON import/export | ✅ |
 | Google login | ⏳ ยังไม่ทำ (ต้องมี OAuth credentials) — UI แจ้งชัดเจน |
-| Character import จาก PDF/รูป (OCR/AI) | ⏳ Phase 3 |
+| Character import จาก PDF/รูป (Claude API, ตรวจทุก field ก่อนบันทึก) | ✅ ต้องตั้ง `ANTHROPIC_API_KEY` ที่ server |
+| Character creator แบบมีขั้นตอน (5e 2014, SRD 5.1) + ทอยจาก token + dice animation | ✅ Phase 3 |
 | อัปโหลดรูป (map/token) — ตรวจชนิดไฟล์จริง, จำกัดขนาด, เสิร์ฟเฉพาะสมาชิก | ✅ |
 | แผนที่: grid square/hex/none, pan/zoom, หลายแผนที่ + active scene, ทำสำเนา, DM notes | ✅ Konva |
 | Token: วาง/ลาก/snap, ซ่อน/ล็อก/layer/ผู้ควบคุม, sync realtime ต่อผู้รับ | ✅ |
@@ -73,6 +74,8 @@ pnpm typecheck
 # E2E (DM + ผู้เล่น 2 browser context): build web, รัน server ตามด้านบนที่พอร์ต 3001 แล้ว
 BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase1.e2e.cjs
 BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase2.e2e.cjs   # map/token/fog, DM + ผู้เล่น
+BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase3.e2e.cjs   # import ชีต + character creator
+BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase4.e2e.cjs   # combat + dice animation
 ```
 
 `TEST_DATABASE_URL` ใช้กำหนด DB สำหรับ integration test (ค่าเริ่มต้น `postgres://postgres@localhost:5432/vtt_test` — **ถูกล้างทุกครั้งที่รัน**)

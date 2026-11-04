@@ -52,12 +52,19 @@
 - [ ] Character sheet (labels ยกเว้นศัพท์เกม)
 - [ ] ข้อความ error จาก server (ส่ง `code` แล้ว client แปล)
 
-## Phase 3 — Character & Dice (ถัดไป)
+## Phase 3 — Character & Dice ✅
 
-- [ ] Character creator wizard
-- [ ] Dice animation 2D + sound (ปิดได้) — settings มีแล้วใน profile
-- [ ] Character import จาก PDF/รูป (OCR/AI provider interface, confidence, review ทุก field)
-- [ ] Ability checks / attacks จาก token HUD
+- [x] Character creator wizard (5e 2014, SRD 5.1): 9 race + subrace, 12 class, Acolyte + background ของผู้เล่นเอง,
+      standard array / point buy 27 / ทอย 4d6 ตัดต่ำสุด, เลือก skill ตามกฎ, คำนวณ HP/AC/slots/feature uses, ตรวจกฎใน `@vtt/rules`
+- [x] Dice animation 2D + เสียงสังเคราะห์ (ปิดได้ใน profile, เคารพ prefers-reduced-motion)
+- [x] Character import จาก PDF/รูปผ่าน Claude API (key อยู่ที่ server เท่านั้น, จำกัดครั้งต่อชั่วโมง, ตรวจชนิดไฟล์จริง,
+      ไฮไลต์ field ที่ไม่แน่ใจ, ผู้ใช้ตรวจทุก field ก่อนบันทึก, UI แจ้งชัดเมื่อ server ไม่มี key)
+- [x] Ability checks / saves / skills / initiative / attacks จาก token บนแผนที่ + เปิด sheet ที่โต๊ะ
+- [x] Tests: unit (creator rules, import mapping, dice fx), integration (import route), E2E `e2e/phase3.e2e.cjs`
+- [ ] Creator สำหรับ 5e 2024 (SRD 5.2: background ให้ ability bonus) — ตอนนี้ใช้ชีตว่างแทน
+- [ ] Creator: เลือก cantrip/spell และอุปกรณ์เริ่มต้น (ตอนนี้เพิ่มเองในชีต)
+- [ ] ข้อความ error ของ creator เป็นภาษาไทย (ตอนนี้มาจาก rules engine เป็นอังกฤษ)
+- [ ] ทดสอบ import กับ Claude API จริง (environment นี้ไม่มี ANTHROPIC_API_KEY; ทดสอบผ่าน fake extractor + stub UI แล้ว)
 
 ## Phase 4 — Combat ✅
 

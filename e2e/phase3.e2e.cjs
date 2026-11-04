@@ -1,5 +1,6 @@
 /**
- * Phase 3 browser walkthrough: character sheet import (PDF/photo → review → save).
+ * Phase 3 browser walkthrough: character sheet import (PDF/photo → review → save) and
+ * the guided SRD character creator.
  * The real server runs without ANTHROPIC_API_KEY, so first we check the page says so;
  * then the extraction response is stubbed in the browser (the Claude call itself is covered
  * by the server's provider interface + integration tests) to exercise review and save
@@ -96,6 +97,49 @@ const DRAFT = {
   assert.equal(c.data.classes[0].hitDie, 8);
   await page.getByText("Kestrel Vane").first().waitFor();
   await shot(page, "p3-03-imported-sheet");
+
+  // 3) Guided creator (5e 2014, SRD 5.1): Hill Dwarf Life cleric, Acolyte.
+  await page.goto(`${BASE}/`);
+  await page.getByTestId("create-guided-link").click();
+  await page.waitForURL(/\/characters\/new$/);
+  // Nothing chosen yet → the rules list what's missing and Create is disabled.
+  await page.getByTestId("creator-errors").getByText("Enter a name.").waitFor();
+  assert.equal(await page.getByTestId("creator-create").isDisabled(), true);
+  await page.getByTestId("creator-name").fill("Thalia Stonehearth");
+  await page.getByTestId("creator-race-dwarf").click();
+  await page.getByTestId("creator-class-cleric").click();
+  // Point buy shows the budget live.
+  await page.getByTestId("creator-method-pointbuy").click();
+  await page.getByText("Points: 0/27").waitFor();
+  await page.getByTestId("creator-base-wis").fill("15");
+  await page.getByText("Points: 9/27").waitFor();
+  // Back to the standard array: picking 15 for WIS swaps it with STR.
+  await page.getByTestId("creator-method-standard").click();
+  await page.getByTestId("creator-base-wis").selectOption("15");
+  assert.equal(await page.getByTestId("creator-base-str").inputValue(), "10");
+  assert.equal((await page.getByTestId("creator-final-wis").textContent()).trim().startsWith("16"), true, "Hill Dwarf +1 WIS");
+  // Acolyte already gives Insight, so the cleric can't pick it again.
+  assert.equal(await page.getByTestId("creator-skill-insight").isDisabled(), true);
+  await page.getByTestId("creator-skill-medicine").click();
+  await page.getByTestId("creator-skill-history").click();
+  await page.getByTestId("creator-preview").waitFor();
+  // d8 + CON 15 (+2) + Dwarven Toughness 1 = 11; AC 10 + DEX 14 (+2) = 12.
+  assert.equal((await page.getByTestId("creator-hp").textContent()).trim(), "11");
+  assert.equal((await page.getByTestId("creator-ac").textContent()).trim(), "12");
+  await shot(page, "p3-04-creator");
+  await page.getByTestId("creator-create").click();
+  await page.waitForURL(/\/characters\/[0-9a-f-]{36}$/);
+  const cid = page.url().split("/").pop();
+  const made = await page.evaluate(async (id) => (await (await fetch(`/api/characters/${id}`)).json()).character, cid);
+  assert.equal(made.name, "Thalia Stonehearth");
+  assert.equal(made.rulesetId, "dnd5e-2014");
+  assert.deepEqual(made.data.abilities, { str: 10, dex: 14, con: 15, int: 12, wis: 16, cha: 8 });
+  assert.deepEqual(made.data.hp, { max: 11, current: 11, temp: 0 });
+  assert.deepEqual(Object.keys(made.data.skills).sort(), ["history", "insight", "medicine", "religion"]);
+  assert.equal(made.data.classes[0].subclass, "Life Domain");
+  assert.equal(made.data.spellcasting.slots[0].max, 2);
+  await page.getByText("Thalia Stonehearth").first().waitFor();
+  await shot(page, "p3-05-created-sheet");
 
   assert.deepEqual(errors, [], `Page errors: ${errors.join("; ")}`);
   console.log("PHASE 3 E2E OK");

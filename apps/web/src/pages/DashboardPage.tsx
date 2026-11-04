@@ -257,9 +257,12 @@ function CharacterLibrary() {
           <option value="dnd5e-2024">D&amp;D 5e (2024)</option>
           <option value="dnd5e-2014">D&amp;D 5e (2014)</option>
         </Select>
-        <Button variant="primary" onClick={create} loading={creating} className="shrink-0">
-          + New
+        <Button variant="ghost" onClick={create} loading={creating} className="shrink-0" title="Start from an empty sheet for the selected ruleset">
+          + Blank sheet
         </Button>
+        <Link to="/characters/new" data-testid="create-guided-link" className="shrink-0">
+          <Button variant="primary" title="Step-by-step level 1 character (5e 2014, SRD 5.1)">+ Guided (5e 2014)</Button>
+        </Link>
       </div>
       {lib.loading ? (
         <Loading />
@@ -284,7 +287,6 @@ function CharacterLibrary() {
           ))}
         </ul>
       )}
-      <p className="mt-4 text-xs text-parchment-500">PDF / image character-sheet import (OCR + AI) is planned for Phase 3.</p>
     </Card>
   );
 }
