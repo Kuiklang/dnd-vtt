@@ -11,10 +11,13 @@
 | 7 | **ความต่างของกฎ 2014 vs 2024** | คำนวณผิดเวอร์ชัน | Ruleset เป็น data แยกชุด, character ผูก `ruleset_id`, ไม่ให้เลือก character ต่าง ruleset เข้าแคมเปญ, test แยกต่อ ruleset |
 | 8 | **Asset upload ไม่ปลอดภัย** | XSS ผ่าน SVG, ไฟล์ใหญ่, malware | ✅ magic bytes allowlist, ไม่รับ SVG, จำกัดขนาด, `nosniff` + `inline`. ยังไม่มี: quota ต่อ user, re-encode/strip EXIF, domain แยกสำหรับไฟล์, S3 backend |
 | 9 | **Audio sync** latency ต่างกันในแต่ละ client | เพลงไม่พร้อมกัน | sync ด้วย server timestamp + position; ยอมรับ drift เล็กน้อย; volume เป็นของผู้เล่นเสมอ |
-| 10 | **Bundle size** (main ~536KB, table chunk ~366KB min) | โหลดช้าบนมือถือ | ✅ หน้าโต๊ะ (Konva) lazy load แล้ว; ต่อไป: split หน้า character sheet, ตัด zod schemas ที่ client ไม่ใช้ |
+| 10 | **Bundle size** | โหลดช้าบนมือถือ | ✅ ทุกหน้า lazy load (Phase 9): ไฟล์แรก ~332KB (gzip ~103KB), หน้าโต๊ะ ~424KB โหลดเมื่อเปิดโต๊ะ; ต่อไป: ตัด zod schemas ที่ client ไม่ใช้ |
 | 11 | **Guest abuse** (สร้าง guest จำนวนมาก) | spam / DB โต | rate limit ต่อ IP (มีแล้ว), guest หมดอายุ 7 วัน, job ลบ guest หมดอายุ (ยังไม่ทำ — ต้องเพิ่ม cron) |
-| 12 | **Voice chat** ซับซ้อน (NAT/TURN) | ต้นทุน + เวลา | ทำเป็น optional module ผ่านบริการภายนอก (LiveKit ฯลฯ) ไม่เป็น dependency ของระบบหลัก |
+| 12 | **Voice chat** ซับซ้อน (NAT/TURN) | บางเครือข่ายต่อไม่ติด | ✅ WebRTC mesh + STUN ฟรี (Phase 8); เครือข่ายเข้มงวดต้องตั้ง TURN (`VOICE_ICE_SERVERS`); วงใหญ่ >8 คนควรใช้ SFU (LiveKit) |
 | 13 | **Undo/Redo** ใน multiplayer | ย้อนข้อมูลคนอื่น | operation log ต่อ entity + ตรวจ precondition (version) ก่อน undo; ไม่ทำ global undo |
+
+| 14 | **เล่นผ่าน tunnel** (Cloudflare/Tailscale) | origin/cookie/IP ผิด | ✅ origin เทียบ host ไม่สน scheme, เชื่อ X-Forwarded-* เฉพาะจาก localhost, cookie Secure อัตโนมัติเมื่อเป็น https |
+| 15 | **Embedded Postgres** (แพ็กเกจ `embedded-postgres` ยังเป็น beta) | เปิดฐานข้อมูลไม่ขึ้นบางเครื่อง | pin เวอร์ชันที่ออกมานานแล้ว (17.10.0-beta.17), ข้อมูลเป็นโฟลเดอร์ Postgres ปกติ (สำรอง/ย้ายได้), ใช้ Postgres ของตัวเองได้ด้วย `HOME_DB=external` |
 
 ## Dependency notes
 

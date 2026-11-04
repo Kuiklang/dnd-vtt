@@ -44,8 +44,11 @@ export async function buildApp(
   opts: { realtime?: boolean; storage?: Storage; sheetExtractor?: SheetExtractor | null; aiModel?: TextModel | null } = {},
 ): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: config.NODE_ENV === "test" ? false : { level: config.NODE_ENV === "production" ? "info" : "debug" },
-    trustProxy: config.NODE_ENV === "production",
+    logger: config.NODE_ENV === "test" ? false : { level: config.LOG_LEVEL ?? (config.NODE_ENV === "production" ? "info" : "debug") },
+    // Behind a tunnel on the same computer (Cloudflare Tunnel, Tailscale Funnel) the proxy
+    // connects from localhost: trust its X-Forwarded-* so each friend gets their own IP
+    // (rate limits) and https is detected (secure cookies).
+    trustProxy: config.NODE_ENV === "production" ? true : "loopback",
     bodyLimit: 512 * 1024,
   });
 
@@ -91,8 +94,10 @@ export async function buildApp(
   // CSRF defence: state-changing requests must come from our own origin (cookies are SameSite=Lax too).
   app.addHook("onRequest", async (req) => {
     if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") return;
+    // Same host counts whatever the scheme: a tunnel serves https while the server sees http.
     const origin = req.headers.origin;
-    if (origin && origin !== config.WEB_ORIGIN && origin !== `${req.protocol}://${req.headers.host}`) {
+    const host = req.headers.host;
+    if (origin && origin !== config.WEB_ORIGIN && !(host && (origin === `http://${host}` || origin === `https://${host}`))) {
       throw new HttpError(403, "bad_origin", "Cross-origin request blocked");
     }
   });

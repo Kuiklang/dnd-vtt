@@ -90,3 +90,7 @@
 57. **AI ผู้ช่วย DM ผ่าน Claude Code ในเครื่อง (`AI_PROVIDER=claude-code`)** — ฟรีตามแพ็กเกจของผู้ใช้; ไม่ให้ tool (`--tools ""`),
     cwd เป็นโฟลเดอร์ว่าง, เฉพาะผู้มีสิทธิ์ `dmNotes.view`, บริบทมีแค่ข้อมูลแคมเปญ + log สาธารณะ; คำตอบไม่ถูกส่งให้ผู้เล่นจนกว่า DM จะแชร์เอง
 58. **`AI_PROVIDER` ตัวเดียวคุม AI ทุกอย่าง** (`auto` | `api` | `claude-code` | `off`) — `SHEET_READER` ยังใช้ทับเฉพาะการอ่าน sheet ได้
+59. **เล่นที่บ้านด้วย Postgres ในตัว (`embedded-postgres`)** แทน SQLite/PGlite — ใช้ Postgres ตัวจริง โค้ด/SQL/การล็อกแถวเหมือนเดิมทุกอย่าง
+    ผู้ใช้ไม่ต้องติดตั้งฐานข้อมูล; ฟังเฉพาะ localhost, รหัสสุ่มเก็บใน `data/`; pin เวอร์ชันที่ออกมาแล้วหลายเดือน
+60. **เล่นออนไลน์ผ่าน Cloudflare quick tunnel เป็นค่าแนะนำ** — ฟรี ไม่ต้องสมัคร ได้ https (จำเป็นสำหรับไมค์) และ WebSocket;
+    Tailscale เป็นทางเลือกสำหรับลิงก์คงที่. server เชื่อ `X-Forwarded-*` เฉพาะจาก loopback (ตัว tunnel) และเทียบ Origin กับ host โดยไม่สน scheme

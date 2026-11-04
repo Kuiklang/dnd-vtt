@@ -25,7 +25,7 @@ MVP = สิ่งที่กลุ่มหนึ่งใช้เล่น�
 | 6 Music | audio upload, playlists, ambient layers, realtime sync (DM controls, player local volume) | ✅ เสร็จ (ยังไม่มี crossfade และเพลงประจำ scene) |
 | 7 Advanced ✅ | spell library + casting + AoE templates (ลากย้ายได้), inventory transfer, scene music, concentration, undo/redo, session recap, timeline · ย้ายไปทีหลัง: scene templates, drawing tools, custom layers | เสร็จ 2026-11-04 |
 | 8 Advanced features | dynamic lighting & vision (กำแพง/ประตู/แสง/darkvision, กรองที่ server), voice chat (WebRTC mesh), AI ผู้ช่วย DM (Claude Code ในเครื่อง) | ✅ เสร็จ 2026-11-04 |
-| 9 Polish | UI polish, performance, security review, docs, accessibility | |
+| 9 Polish | เล่นที่บ้านคำสั่งเดียว (Postgres ในตัว), Windows .bat, เล่นออนไลน์ผ่าน Cloudflare Tunnel/Tailscale, lazy load, security review, คู่มือไทย · ยังไม่ทำ: accessibility pass, แปลไทยหน้าที่เหลือ | ✅ เสร็จ 2026-11-04 |
 
 ## Phase 1 — สิ่งที่ส่งมอบ
 

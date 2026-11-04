@@ -43,6 +43,8 @@ const envSchema = z.object({
    * server for friends behind strict networks. Default: a public STUN server.
    */
   VOICE_ICE_SERVERS: z.string().optional(),
+  /** Server log detail (default: info in production, debug otherwise). */
+  LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).optional(),
   /** Disable rate limiting (tests only). */
   RATE_LIMIT: z
     .enum(["on", "off"])

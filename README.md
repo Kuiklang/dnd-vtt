@@ -5,7 +5,17 @@
 แพลตฟอร์ม Virtual Tabletop สำหรับ Dungeons & Dragons ที่รวมเครื่องมือของ DM และผู้เล่นไว้ในเว็บเดียว
 (ชื่อ "Arcane Table" เป็นชื่อชั่วคราว เปลี่ยนได้ภายหลัง)
 
-## สถานะปัจจุบัน: Phase 1 ✅ · Phase 2 (Core VTT) ✅
+## 🎲 อยากเล่นเลย (Windows)
+
+1. ดาวน์โหลดโค้ด (ปุ่ม **Code → Download ZIP**) แล้วแตกไฟล์
+2. ดับเบิลคลิก **`setup-windows.bat`** (ครั้งแรกครั้งเดียว)
+3. ดับเบิลคลิก **`start-windows.bat`** ทุกครั้งที่จะเล่น → เปิด http://localhost:3001 ให้เอง
+4. ชวนเพื่อนผ่านอินเทอร์เน็ต: ดับเบิลคลิก **`play-online-windows.bat`** แล้วส่งลิงก์ `https://….trycloudflare.com` ให้เพื่อน
+
+ไม่ต้องติดตั้งฐานข้อมูลเอง ไม่มีค่าใช้จ่าย · คู่มือเต็ม (ภาษาไทย): **[docs/PLAY_ONLINE.md](docs/PLAY_ONLINE.md)**
+Mac/Linux: `pnpm setup:play` ครั้งแรก แล้ว `pnpm play`
+
+## สถานะปัจจุบัน: Phase 1–9 ✅ (พร้อมเล่น)
 
 ความคืบหน้าละเอียด: [PROJECT_PLAN.md](PROJECT_PLAN.md) · งานที่เหลือ: [TODO.md](TODO.md)
 
@@ -75,7 +85,7 @@ server จะรัน migration อัตโนมัติตอนเริ�
 ## การทดสอบ
 
 ```bash
-pnpm test           # rules (115) + server integration (40, ต้องมี DB vtt_test) + web (6)
+pnpm test           # rules (162) + server integration (79, ต้องมี DB vtt_test) + web (12)
 pnpm typecheck
 
 # E2E (DM + ผู้เล่น 2 browser context): build web, รัน server ตามด้านบนที่พอร์ต 3001 แล้ว
@@ -87,12 +97,14 @@ BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase5.e2e.cjs   # DM t
 BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase6.e2e.cjs   # music & ambience
 BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase7.e2e.cjs   # spells, AoE templates, scene music, give item
 BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase7b.e2e.cjs  # concentration, template drag, undo/redo, recap + timeline
+BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase8.e2e.cjs   # walls/doors/vision, voice, AI (AI_E2E=off เพื่อข้าม)
 ```
 
 `TEST_DATABASE_URL` ใช้กำหนด DB สำหรับ integration test (ค่าเริ่มต้น `postgres://postgres@localhost:5432/vtt_test` — **ถูกล้างทุกครั้งที่รัน**)
 
 ## เอกสาร
 
+- [docs/PLAY_ONLINE.md](docs/PLAY_ONLINE.md) — ติดตั้งบน Windows, เริ่มเล่น, ชวนเพื่อนเล่นออนไลน์ฟรี, voice, แก้ปัญหา
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — สถาปัตยกรรม, module structure, realtime, security
 - [docs/DATABASE.md](docs/DATABASE.md) — schema ปัจจุบันและ entity ที่วางแผนไว้
 - [docs/ROADMAP.md](docs/ROADMAP.md) — roadmap ทุก phase, MVP, สถานะ

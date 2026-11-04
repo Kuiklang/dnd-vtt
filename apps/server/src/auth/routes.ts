@@ -33,7 +33,7 @@ export async function authRoutes(app: FastifyInstance) {
     reply.setCookie(SESSION_COOKIE, token, {
       httpOnly: true,
       sameSite: "lax",
-      secure: config.COOKIE_SECURE,
+      secure: config.COOKIE_SECURE || req.protocol === "https",
       path: "/",
       expires: expiresAt,
     });
