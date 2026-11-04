@@ -55,13 +55,18 @@ const DRAFT = {
     if (!r.ok) throw new Error(await r.text());
   }, uniq);
 
-  // 1) No API key on this server: the page says so plainly and the button is disabled.
+  // 1) No sheet reader on this server: the page says so plainly and the button is disabled.
+  //    (Stubbed, so the check holds whether or not the server has AI set up.)
+  await page.route("**/api/characters/import/sheet", (route) =>
+    route.request().method() === "GET" ? route.fulfill({ json: { available: false, maxBytes: 10485760 } }) : route.continue(),
+  );
   await page.goto(`${BASE}/`);
   await page.getByTestId("import-sheet-link").click();
   await page.waitForURL(/\/characters\/import$/);
   await page.getByTestId("import-unavailable").waitFor();
   assert.ok(await page.getByTestId("read-sheet").isDisabled());
   await shot(page, "p3-01-import-unavailable");
+  await page.unroute("**/api/characters/import/sheet");
 
   // 2) Stub the reader and go through review → save against the real API.
   await page.route("**/api/characters/import/sheet", async (route) => {

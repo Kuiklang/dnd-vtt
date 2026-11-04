@@ -21,3 +21,4 @@ export * from "./bestiary/srd2014.js";
 export * from "./audio.js";
 export * from "./spells/srd2014.js";
 export * from "./map/templates.js";
+export * from "./map/vision.js";

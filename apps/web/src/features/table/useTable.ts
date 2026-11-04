@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { FogShape } from "@vtt/rules";
+import type { FogShape, Wall, WallKind } from "@vtt/rules";
 import { api, errorMessage } from "../../lib/api";
 import { emitAck, getSocket } from "../../lib/socket";
 import { toast } from "../../stores/toast";
@@ -22,6 +22,7 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
   const [tokens, setTokens] = useState<Map<string, TokenDto>>(new Map());
   const [fog, setFog] = useState<FogOpDto[]>([]);
   const [templates, setTemplates] = useState<TemplateDto[]>([]);
+  const [walls, setWalls] = useState<Wall[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [save, setSave] = useState<SaveStatus>("idle");
   const pending = useRef(0);
@@ -50,6 +51,7 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
     setTokens(new Map(s.tokens.map((t) => [t.id, t])));
     setFog(s.fog);
     setTemplates(s.templates ?? []);
+    setWalls(s.walls ?? []);
   }, []);
 
   const loadScenes = useCallback(async () => {
@@ -94,6 +96,7 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
       setScene(null);
       setTokens(new Map());
       setFog([]);
+      setWalls([]);
     }
   }, [sceneId]);
 
@@ -119,6 +122,18 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
       });
     };
     const onState = (st: SceneState) => st.scene.id === sceneIdRef.current && applyState(st);
+    // Dynamic vision: the server sends a player's whole visible token list after moves.
+    const onTokens = (p: { sceneId: string; tokens: TokenDto[] }) => {
+      if (p.sceneId !== sceneIdRef.current) return;
+      setTokens((m) => {
+        const next = new Map<string, TokenDto>();
+        for (const t of p.tokens) {
+          const cur = m.get(t.id);
+          next.set(t.id, cur && cur.version > t.version ? cur : t);
+        }
+        return next;
+      });
+    };
     const onTemplate = (t: TemplateDto) => {
       if (t.sceneId !== sceneIdRef.current) return;
       setTemplates((list) => [...list.filter((x) => x.id !== t.id), t]);
@@ -141,6 +156,7 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
     s.on("token:upsert", onUpsert);
     s.on("token:remove", onRemove);
     s.on("scene:state", onState);
+    s.on("scene:tokens", onTokens);
     s.on("template:upsert", onTemplate);
     s.on("template:remove", onTemplateRemove);
     s.on("scenes:changed", onScenesChanged);
@@ -150,6 +166,7 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
       s.off("token:upsert", onUpsert);
       s.off("token:remove", onRemove);
       s.off("scene:state", onState);
+      s.off("scene:tokens", onTokens);
       s.off("template:upsert", onTemplate);
       s.off("template:remove", onTemplateRemove);
       s.off("scenes:changed", onScenesChanged);
@@ -255,6 +272,20 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
     [ref, track],
   );
 
+  // ---- Walls & doors (dynamic vision) -----------------------------------------
+  // The server answers wall changes with a fresh scene:state for everyone.
+
+  const addWalls = useCallback(
+    (segs: Array<{ x1: number; y1: number; x2: number; y2: number }>, kind: WallKind) => track(emitAck<{ walls: Wall[] }>("wall:add", { ...ref(), walls: segs, kind })),
+    [ref, track],
+  );
+  const updateWall = useCallback(
+    (wallId: string, patch: Partial<Pick<Wall, "kind" | "locked" | "open">>) => track(emitAck<Wall>("wall:update", { ...ref(), wallId, patch })),
+    [ref, track],
+  );
+  const deleteWalls = useCallback((wallIds: string[] | "all") => track(emitAck("wall:delete", { ...ref(), wallIds })), [ref, track]);
+  const toggleDoor = useCallback((wallId: string) => track(emitAck<{ open: boolean }>("door:toggle", { ...ref(), wallId })), [ref, track]);
+
   // ---- Scenes (REST) ----------------------------------------------------------
 
   const createScene = useCallback(
@@ -269,9 +300,21 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
 
   const updateScene = useCallback(
     async (id: string, body: Record<string, unknown>) => {
-      const res = await track(api.patch<{ scene: SceneDto }>(`/api/campaigns/${campaignId}/scenes/${id}`, body));
-      if (id === sceneIdRef.current) setScene((cur) => (cur ? { ...cur, ...res.scene } : res.scene));
-      return res.scene;
+      // Show the change at once (checkboxes, selects); roll back if the server refuses.
+      let before: SceneDto | null = null;
+      if (id === sceneIdRef.current)
+        setScene((cur) => {
+          before = cur;
+          return cur ? ({ ...cur, ...body } as SceneDto) : cur;
+        });
+      try {
+        const res = await track(api.patch<{ scene: SceneDto }>(`/api/campaigns/${campaignId}/scenes/${id}`, body));
+        if (id === sceneIdRef.current) setScene((cur) => (cur ? { ...cur, ...res.scene } : res.scene));
+        return res.scene;
+      } catch (e) {
+        if (before && id === sceneIdRef.current) setScene(before);
+        throw e;
+      }
     },
     [campaignId, track],
   );
@@ -310,6 +353,11 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
     tokens,
     fog,
     templates,
+    walls,
+    addWalls,
+    updateWall,
+    deleteWalls,
+    toggleDoor,
     createTemplate,
     updateTemplate,
     deleteTemplate,
@@ -354,6 +402,8 @@ const TOKEN_INPUT_KEYS = [
   "ownerIds",
   "hpVisibility",
   "stats",
+  "sight",
+  "light",
 ] as const;
 
 /** Only send fields the server accepts as token input. */

@@ -50,6 +50,13 @@
       "when": 1793807925455,
       "tag": "0006_phase7b_recap_timeline",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793821500542,
+      "tag": "0007_phase8_vision",
+      "breakpoints": true
     }
   ]
 }

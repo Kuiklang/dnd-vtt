@@ -18,21 +18,31 @@ const envSchema = z.object({
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   GUEST_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(7),
   /**
-   * Who reads character sheets from PDFs/photos: "claude-code" (the Claude Code CLI signed in on
-   * this computer, uses your Claude plan, no API bill), "api" (ANTHROPIC_API_KEY, paid per use),
-   * "auto" (the API if a key is set, else off) or "off". When off, the UI says so.
+   * Which AI the server uses (sheet import from PDF/photo and the DM's AI assistant):
+   * "claude-code" (the Claude Code CLI signed in on this computer, uses your Claude plan,
+   * no API bill), "api" (ANTHROPIC_API_KEY, paid per use), "auto" (the API if a key is set,
+   * else off) or "off". When off, the UI says so.
    */
-  SHEET_READER: z.enum(["auto", "api", "claude-code", "off"]).default("auto"),
+  AI_PROVIDER: z.enum(["auto", "api", "claude-code", "off"]).default("auto"),
+  /** Optional override just for sheet import (same values as AI_PROVIDER). */
+  SHEET_READER: z.enum(["auto", "api", "claude-code", "off"]).optional(),
   /** The `claude` command for SHEET_READER=claude-code (full path if it isn't on PATH). */
   CLAUDE_CODE_PATH: z.string().default("claude"),
   /** Optional model for SHEET_READER=claude-code; empty = your plan's default. */
   CLAUDE_CODE_MODEL: z.string().optional(),
-  /** Claude API key for SHEET_READER=api/auto. Never sent to browsers. */
+  /** Claude API key for AI_PROVIDER=api/auto. Never sent to browsers. */
   ANTHROPIC_API_KEY: z.string().optional(),
   /** Model used for sheet import. */
   IMPORT_MODEL: z.string().default("claude-opus-5-5"),
+  /** AI assistant requests allowed per DM per hour. */
+  AI_PER_HOUR: z.coerce.number().int().min(1).max(1000).default(30),
   /** Sheet imports allowed per user per hour (each one is an AI call). */
   IMPORT_PER_HOUR: z.coerce.number().int().min(1).max(1000).default(10),
+  /**
+   * Voice chat ICE servers as JSON, e.g. [{"urls":"stun:stun.l.google.com:19302"}] or a TURN
+   * server for friends behind strict networks. Default: a public STUN server.
+   */
+  VOICE_ICE_SERVERS: z.string().optional(),
   /** Disable rate limiting (tests only). */
   RATE_LIMIT: z
     .enum(["on", "off"])

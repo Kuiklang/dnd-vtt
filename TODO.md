@@ -145,6 +145,20 @@
 - [ ] Drawing tools + custom layers
 - [ ] Crossfade ระหว่างเพลง
 
-## Phase 8–9
+## Phase 8 — Lighting, Voice, AI ✅
+
+- [x] กำแพง / ประตู / ประตูลับ (วาด, ลบ, ล้าง, snap มุมช่อง), ผู้เล่นเปิดประตูที่มองเห็นได้, DM ล็อกประตู
+- [x] Vision ต่อฉาก + แสงรอบข้าง (สว่าง/สลัว/มืด) + darkvision + แหล่งแสงบน token (preset)
+- [x] Server กรอง token ตาม line of sight + หมอก (ส่งเฉพาะที่มองเห็น), ความมืดบนจอผู้เล่น, DM preview มุมมอง token
+- [x] Voice chat WebRTC (mesh ≤12), ปิดไมค์, ไฟคนพูด, ปรับเสียงรายคน, STUN/TURN ตั้งได้
+- [x] AI ผู้ช่วย DM 7 โหมด ผ่าน Claude Code ในเครื่อง (ฟรี) หรือ API key, บันทึกลง journal, DM เท่านั้น, จำกัดครั้ง/ชม.
+- [x] Tests: unit `vision.test.ts`, integration `phase8.test.ts` + `aiAssistant.test.ts`, E2E `e2e/phase8.e2e.cjs`
+- [ ] แสงมีสี / เงานุ่ม / แสงกระพริบ
+- [ ] หน้าต่าง (มองทะลุแต่เดินผ่านไม่ได้) และกำแพงทางเดียว
+- [ ] Token เดินชนกำแพงไม่ได้ (ตอนนี้กำแพงกันแค่การมองเห็น)
+- [ ] จำพื้นที่ที่เคยเห็นแล้ว (explored fog)
+- [ ] Push-to-talk, voice แบบ SFU สำหรับโต๊ะใหญ่
+
+## Phase 9
 
 ดู [docs/ROADMAP.md](docs/ROADMAP.md)

@@ -64,7 +64,7 @@
 | 5 DM Toolkit | NPC/Monster library, encounter builder, journal, handouts, DM screen, random tables | ✅ เสร็จ |
 | 6 Music | audio upload, playlist, ambient, realtime sync | ✅ เสร็จ |
 | 7 Advanced | spells/AoE, ส่งไอเทม, เพลงประจำฉาก, concentration, undo/redo, session recap, timeline ✅ · ย้ายไปทำทีหลัง: scene templates, drawing tools, custom layers | ✅ เสร็จ (2 รอบ) |
-| 8 Advanced features | dynamic lighting & vision, voice chat, AI DM assistant | |
+| 8 Advanced features | dynamic lighting & vision (กำแพง/ประตู/แสง/darkvision), voice chat, AI ผู้ช่วย DM ผ่าน Claude Code ในเครื่อง | ✅ เสร็จ |
 | 9 Polish | UI polish, performance, security review, docs | |
 
 รายละเอียดแต่ละ phase: [docs/ROADMAP.md](docs/ROADMAP.md) · ความเสี่ยง: [docs/RISKS.md](docs/RISKS.md)
@@ -398,6 +398,44 @@
 
 Error ที่พบและแก้: Claude Code ไม่รับ JSON Schema ที่มี `"$schema": draft 2020-12` (จาก `z.toJSONSchema`) → ตัด key นี้ออกก่อนส่ง
 
+### 2026-11-04 — Phase 8: Dynamic lighting & vision, Voice chat, AI ผู้ช่วย DM ✅
+
+**Vision / lighting**
+- DM วาดกำแพงบนแผนที่ (เครื่องมือ W): กำแพง / ประตู / ประตูลับ / ยางลบ, คลิกต่อเนื่องเป็นเส้น, snap มุมช่อง (Alt = วางอิสระ), ดับเบิลคลิกหรือ Esc จบเส้น
+- ประตู: ผู้เล่นคลิกเปิด/ปิดได้ถ้ามองเห็นประตูและไม่ได้ล็อก; DM Shift+คลิกเพื่อล็อก; ประตูลับผู้เล่นเห็นเป็นกำแพงธรรมดา
+- เปิด vision ต่อฉาก + แสงรอบข้าง (สว่าง/สลัว/มืด); token มี darkvision และแหล่งแสง (เทียน/คบเพลิง/ตะเกียง/โคม/เวท Light/แสงแดด)
+- **Server กรอง token ที่ผู้เล่นมองไม่เห็น** (ต้องผ่านทั้งหมอกและ line of sight) — token ที่อยู่หลังกำแพงไม่ถูกส่งไปเลย ไม่ใช่แค่ซ่อนบนจอ
+- ผู้เล่นเห็นความมืดนอกระยะมอง; DM ดูมุมมองของ token ที่เลือกได้ (preview)
+- Logic อยู่ใน `@vtt/rules` (`map/vision.ts`: line of sight, visibility polygon, แสง) ใช้ร่วมกันทั้ง server และ client
+
+**Voice chat**
+- WebRTC แบบเชื่อมตรงทุกคน (mesh, สูงสุด 12 คน) server แค่ส่งข้อความเชื่อมต่อ (เฉพาะคนในห้องเสียงแคมเปญเดียวกัน, จำกัดอัตรา)
+- ปุ่มเข้า/ออก, ปิดไมค์, ไฟแสดงคนที่กำลังพูด, ปรับเสียงแต่ละคน (จำในเบราว์เซอร์)
+- STUN ฟรีของ Google เป็นค่าเริ่มต้น; ตั้ง TURN เองได้ที่ `VOICE_ICE_SERVERS` ถ้าเพื่อนบางคนต่อไม่ติด
+
+**AI ผู้ช่วย DM** (DM Toolkit → แท็บ AI)
+- โหมด: บรรยายฉาก, สร้าง NPC, ไอเดีย encounter, ตั้งชื่อ, ของรางวัล, ถามกฎ (SRD), ถามอะไรก็ได้ — ตอบเป็นภาษาที่เลือกในเว็บ
+- ใช้บริบทแคมเปญ (setting, ปาร์ตี้, แผนที่ปัจจุบัน + DM notes, log สาธารณะล่าสุด) → บันทึกคำตอบลง journal (DM เท่านั้น)
+- ใช้ Claude Code ในเครื่องที่รัน server (`AI_PROVIDER=claude-code` ฟรีตามแพ็กเกจ Claude) — ไม่ให้ใช้ tool ใดๆ, รันในโฟลเดอร์ว่างชั่วคราว; จำกัด `AI_PER_HOUR` ครั้ง/ชม.
+- `AI_PROVIDER` ตัวเดียวคุมทั้ง AI ผู้ช่วยและการอ่าน sheet (`SHEET_READER` ยังใช้ทับได้)
+
+| ชุดทดสอบ | ผล |
+| --- | --- |
+| `packages/rules` unit (+`vision.test.ts` 6 ตัว: line of sight, ประตู, แสง, darkvision, ประตูลับ) | 162/162 ✅ |
+| `apps/server` integration (+`phase8.test.ts` 4 ตัว: กรอง token ตาม vision, ประตู/ล็อก/สิทธิ์, ความมืด/darkvision/คบเพลิง, voice signalling; +`aiAssistant.test.ts` 3 ตัว) | 77/77 ✅ |
+| `apps/web` unit | 12/12 ✅ |
+| E2E `e2e/phase8.e2e.cjs` (2 เบราว์เซอร์: กำแพง+ประตู → goblin หาย → ผู้เล่นเปิดประตู → มืด → คบเพลิง → DM preview → voice เชื่อมต่อจริง/ปิดไมค์/ออก → AI สร้าง NPC ด้วย Claude Code จริง + บันทึก journal) | ✅ |
+| E2E phase 1–7b ซ้ำ (regression) | ✅ ทั้งหมด |
+
+Error ที่พบและแก้:
+- คลิกวาดกำแพงเร็วๆ แล้วเส้นหาย: Konva นับ dblclick จากเวลาอย่างเดียว (คลิกคนละจุดก็นับ) → ตรวจดับเบิลคลิกเองว่าเป็นมุมเดิมภายใน 450ms
+- กด Esc แล้วหลุดจากเครื่องมือกำแพง → Esc จบเส้นแต่ยังอยู่ในเครื่องมือ
+- Checkbox เปิด vision ไม่เปลี่ยนจนกว่า server ตอบ → อัปเดตฉากทันที (optimistic) และย้อนถ้า server ปฏิเสธ
+- Test E2E phase 3 พังเมื่อ server เปิด AI → stub สถานะ "ไม่มีตัวอ่าน" ใน test แทนการพึ่งค่าใน `.env`
+
+ข้อจำกัด: ไม่มีแสงสี/เงานุ่ม (แสงเป็นวงกลมตัดด้วยกำแพง), ไม่มีกำแพงแบบมองทะลุได้ทางเดียว/หน้าต่าง, voice แบบ mesh เหมาะกับโต๊ะไม่เกิน ~8 คน,
+AI ใช้ได้เฉพาะเมื่อ server รันบนคอมที่ล็อกอิน Claude Code ไว้
+
 ---
 
 ## 5. วิธีรันและทดสอบ
@@ -411,5 +449,5 @@ cp apps/server/.env.example apps/server/.env
 pnpm db:migrate && pnpm dev                    # http://localhost:5173
 TEST_DATABASE_URL=postgres://… pnpm test       # unit + integration
 pnpm --filter @vtt/web build && (cd apps/server && WEB_DIST=../web/dist WEB_ORIGIN=http://localhost:3001 pnpm start)
-for f in phase1 phase2 phase3 phase4 phase5; do BASE_URL=http://localhost:3001 node e2e/$f.e2e.cjs; done
+for f in phase1 phase2 phase3 phase4 phase5 phase6 phase7 phase7b phase8; do BASE_URL=http://localhost:3001 node e2e/$f.e2e.cjs; done
 ```

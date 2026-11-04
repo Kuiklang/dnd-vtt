@@ -31,6 +31,8 @@ import { dmToolRoutes } from "./dmtools/routes.js";
 import { DmToolsService } from "./dmtools/service.js";
 import { TimelineService } from "./timeline/service.js";
 import { timelineRoutes } from "./timeline/routes.js";
+import { aiRoutes } from "./ai/routes.js";
+import { textModelFromConfig, type TextModel } from "./ai/assistant.js";
 import { AudioService } from "./audio/service.js";
 import { audioRoutes } from "./audio/routes.js";
 import { CharacterActions } from "./characters/actions.js";
@@ -39,7 +41,7 @@ import { characterActionRoutes } from "./characters/actionRoutes.js";
 export async function buildApp(
   config: Config,
   db: Db,
-  opts: { realtime?: boolean; storage?: Storage; sheetExtractor?: SheetExtractor | null } = {},
+  opts: { realtime?: boolean; storage?: Storage; sheetExtractor?: SheetExtractor | null; aiModel?: TextModel | null } = {},
 ): Promise<FastifyInstance> {
   const app = Fastify({
     logger: config.NODE_ENV === "test" ? false : { level: config.NODE_ENV === "production" ? "info" : "debug" },
@@ -128,6 +130,7 @@ export async function buildApp(
   await app.register(characterActionRoutes);
   await app.register(timelineRoutes);
   await app.register(sheetImportRoutes, { extractor: opts.sheetExtractor !== undefined ? opts.sheetExtractor : extractorFromConfig(config) });
+  await app.register(aiRoutes, { model: opts.aiModel !== undefined ? opts.aiModel : textModelFromConfig(config) });
 
   if (config.WEB_DIST && existsSync(config.WEB_DIST)) {
     await app.register(fastifyStatic, { root: path.resolve(config.WEB_DIST) });

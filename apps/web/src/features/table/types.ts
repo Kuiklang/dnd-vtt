@@ -1,4 +1,4 @@
-import type { ActionEconomy, Defenses, FogShape, GridSettings, HpState, TokenCondition, TokenState } from "@vtt/rules";
+import type { ActionEconomy, Defenses, FogShape, GridSettings, HpState, SceneVision, TokenCondition, TokenLight, TokenSight, TokenState, Wall } from "@vtt/rules";
 
 export interface SceneDto {
   id: string;
@@ -18,6 +18,8 @@ export interface SceneDto {
   version: number;
   isActive: boolean;
   updatedAt: string;
+  /** Dynamic lighting & vision. */
+  vision: SceneVision;
 }
 
 /** HP/AC/conditions as this viewer may see them. */
@@ -52,6 +54,8 @@ export interface TokenDto extends TokenState {
   vitalsHidden: boolean;
   /** GM-only stat block link (always null for players). */
   statBlock?: StatBlockRef | null;
+  sight?: TokenSight | null;
+  light?: TokenLight | null;
 }
 
 export interface CombatantDto {
@@ -105,6 +109,7 @@ export interface SceneState {
   tokens: TokenDto[];
   fog: FogOpDto[];
   templates: TemplateDto[];
+  walls?: Wall[];
 }
 
 export interface AssetDto {
@@ -116,5 +121,5 @@ export interface AssetDto {
   url: string;
 }
 
-export type Tool = "select" | "pan" | "measure" | "fog-reveal" | "fog-hide" | "template";
+export type Tool = "select" | "pan" | "measure" | "fog-reveal" | "fog-hide" | "template" | "wall";
 export type FogShapeKind = FogShape["kind"];

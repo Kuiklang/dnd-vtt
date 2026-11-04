@@ -51,6 +51,14 @@ Enums ใหม่: `asset_kind`, `token_layer`, `token_shape`, `fog_mode`
 - การ join ล็อกแถว campaign (`SELECT … FOR UPDATE`) จึงไม่เกิน max players แม้ join พร้อมกัน
 - การใช้ invite เพิ่ม `uses` แบบมีเงื่อนไขใน UPDATE เดียว (atomic)
 
+## Phase 8 (implemented — migration `0007_phase8_vision.sql`)
+
+| ตาราง/คอลัมน์ | ใช้ทำอะไร | หมายเหตุ |
+| --- | --- | --- |
+| `scenes.vision` jsonb | `{enabled, ambient: bright|dim|dark}` | ค่าเริ่มต้นปิด |
+| `tokens.sight` / `tokens.light` jsonb | darkvision (ft) / แสง `{bright, dim, color}` | nullable |
+| `map_walls` | กำแพงต่อฉาก: x1..y2, `kind` (wall/door/secret), `open`, `locked` | `campaign_id` + `scene_id` (cascade), ≤2000/ฉาก; ประตูลับส่งให้ผู้เล่นเป็น wall |
+
 ## Planned entities (Phase 2+)
 
 ออกแบบไว้ล่วงหน้าเพื่อให้ schema โตได้โดยไม่ต้องรื้อ:

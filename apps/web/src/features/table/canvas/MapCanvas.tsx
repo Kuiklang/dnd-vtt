@@ -4,7 +4,9 @@ import type Konva from "konva";
 import useImage from "use-image";
 import {
   TOKEN_LAYERS,
+  buildViewerSight,
   canControlToken,
+  pxPerUnit,
   pathDistance,
   snapToGrid,
   templateOutline,
@@ -13,11 +15,13 @@ import {
   type DiagonalRule,
   type FogShape,
   type Point,
+  type Wall,
 } from "@vtt/rules";
 import type { FogOpDto, FogShapeKind, SceneDto, TemplateDto, TokenDto, Tool } from "../types";
 import type { TemplatePreset } from "../../templates/store";
 import { drawFog, drawGrid, traceShape } from "./draw";
 import { TokenNode } from "./TokenNode";
+import { drawDarkness, visionShapes } from "./vision";
 
 export interface MapCanvasHandle {
   fit(): void;
@@ -50,6 +54,17 @@ interface Props {
   onPlaceTemplate(t: MapTemplate): void;
   /** Drag a template you own (or any, for the GM) to a new origin. */
   onMoveTemplate(id: string, x: number, y: number): void;
+  /** Walls and doors for dynamic vision. */
+  walls: Wall[];
+  /** Wall tool: what the next drawn walls are, or erase mode. */
+  wallMode: Wall["kind"] | "erase";
+  onAddWall(seg: { x1: number; y1: number; x2: number; y2: number }): void;
+  onDeleteWall(id: string): void;
+  onToggleDoor(id: string): void;
+  /** GM: lock or unlock a door (shift-click its icon). */
+  onToggleLock(id: string): void;
+  /** GM: show the map as the given token sees it. */
+  visionPreviewId?: string | null;
 }
 
 interface View {
@@ -65,6 +80,16 @@ const layerOrder = (l: TokenDto["layer"]) => TOKEN_LAYERS.indexOf(l);
 export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(props, ref) {
   const { scene, tokens, fog, myId, isGM, tool, fogShape, spaceHeld, diagonal, selectedId, activeTokenId, defeatedIds, onSelect, onMoveToken, onFogShape } = props;
   const { templates: storedTemplates, templatePreset, selectedTemplateId, onSelectTemplate, onPlaceTemplate, onMoveTemplate } = props;
+  const { walls, wallMode, onAddWall, onDeleteWall, onToggleDoor, onToggleLock, visionPreviewId } = props;
+  const [chain, setChainState] = useState<Point | null>(null);
+  // A ref too, so quick clicks never see a stale chain start.
+  const chainRef = useRef<Point | null>(null);
+  const lastWallClick = useRef<{ p: Point; at: number } | null>(null);
+  const setChain = useCallback((p: Point | null) => {
+    chainRef.current = p;
+    if (!p) lastWallClick.current = null;
+    setChainState(p);
+  }, []);
   // While a template is dragged, its live position drives the hit rings.
   // `settled`: dropped, waiting for the server to confirm (drawn at the new spot meanwhile).
   const [dragging, setDragging] = useState<{ id: string; x: number; y: number; settled?: boolean } | null>(null);
@@ -125,7 +150,8 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(p
     setDraft(null);
     setPoly([]);
     setAim(null);
-  }, [tool, fogShape, scene.id]);
+    setChain(null);
+  }, [tool, fogShape, scene.id, wallMode]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -134,6 +160,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(p
         setDraft(null);
         setPoly([]);
         setAim(null);
+        setChain(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -159,6 +186,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(p
   const isFogTool = tool === "fog-reveal" || tool === "fog-hide";
   const fogMode = tool === "fog-reveal" ? "reveal" : "hide";
   const stageDraggable = tool === "pan" || spaceHeld || tool === "select";
+  const showWalls = isGM && (tool === "wall" || !!scene.vision?.enabled);
 
   const onMouseDown = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
     if (spaceHeld) return;
@@ -211,16 +239,38 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(p
     if (big) onFogShape(fogMode, shape);
   };
 
+  /** Wall ends snap to grid corners (hold Alt to place freely). */
+  const snapCorner = (p: Point, free: boolean) => {
+    if (free || scene.grid.type === "none") return { x: Math.round(p.x), y: Math.round(p.y) };
+    return scene.grid.type === "square" ? snapToGrid(p, scene.grid, 2) : snapToGrid(p, scene.grid);
+  };
+
   const onClick = (e: Konva.KonvaEventObject<MouseEvent>) => {
     if (e.evt.button !== 0 || spaceHeld) return;
     const p = scenePoint();
     if (!p) return;
+    if (tool === "wall" && wallMode !== "erase") {
+      const q = snapCorner(p, e.evt.altKey);
+      // A second click on the same corner (a double-click) ends the wall.
+      const last = lastWallClick.current;
+      lastWallClick.current = { p: q, at: Date.now() };
+      if (last && Date.now() - last.at < 450 && Math.hypot(q.x - last.p.x, q.y - last.p.y) < 1) {
+        setChain(null);
+        lastWallClick.current = null;
+        return;
+      }
+      const start = chainRef.current;
+      if (start && Math.hypot(q.x - start.x, q.y - start.y) >= 1) onAddWall({ x1: start.x, y1: start.y, x2: q.x, y2: q.y });
+      setChain(q);
+      return;
+    }
     if (tool === "measure") setMeasure((m) => [...m, snap(p)]);
     if (isFogTool && fogShape === "polygon") setPoly((pts) => [...pts, p]);
   };
 
   const onDblClick = () => {
     if (tool === "measure") setMeasure([]);
+
     if (isFogTool && fogShape === "polygon") {
       // The double-click's two clicks both added points; drop the duplicate.
       const pts = poly.slice(0, -1);
@@ -237,6 +287,26 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(p
     for (const t of [...templates, ...(aimed ? [aimed] : [])]) for (const id of tokensInTemplate(t, tokens, g)) ids.add(id);
     return ids;
   }, [templates, aimed, tokens, scene.grid]);
+
+  // ---- Dynamic vision ----
+  // Players see through their own tokens; the GM can preview any token's view.
+  const sight = useMemo(() => {
+    if (!scene.vision?.enabled) return null;
+    if (isGM && !visionPreviewId) return null;
+    const uid = isGM ? "__preview__" : myId;
+    const list = tokens.map((t) => {
+      const base = { x: t.x, y: t.y, hidden: t.hidden, layer: t.layer, sight: t.sight ?? null, light: t.light ?? null, ownerIds: t.ownerIds };
+      if (!isGM) return base;
+      return t.id === visionPreviewId ? { ...base, ownerIds: [uid], hidden: false } : { ...base, ownerIds: [] };
+    });
+    return buildViewerSight(scene.vision, walls, list, uid, pxPerUnit(scene.grid));
+  }, [scene.vision, scene.grid, isGM, visionPreviewId, myId, tokens, walls]);
+  const shapes = useMemo(() => (sight ? visionShapes(sight, scene.width, scene.height) : null), [sight, scene.width, scene.height]);
+  const darknessEl = shapes && (
+    <Layer name="darkness" listening={false} opacity={isGM ? 0.85 : 1}>
+      <Shape sceneFunc={(ctx) => drawDarkness(ctx._context, shapes, scene.width, scene.height, "#050407")} />
+    </Layer>
+  );
 
   const sorted = useMemo(() => [...tokens].sort((a, b) => layerOrder(a.layer) - layerOrder(b.layer)), [tokens]);
   const viewer = useMemo(() => ({ userId: myId, isGameMaster: isGM }), [myId, isGM]);
@@ -343,7 +413,8 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(p
         </Layer>
 
         {!isGM && fogLayerEl}
-        <Layer name="tokens" listening={!isFogTool && tool !== "measure" && tool !== "template"}>
+        {!isGM && darknessEl}
+        <Layer name="tokens" listening={!isFogTool && tool !== "measure" && tool !== "template" && tool !== "wall"}>
           {sorted.map((t) => (
             <TokenNode
               key={t.id}
@@ -361,6 +432,55 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(p
         </Layer>
 
         {isGM && fogLayerEl}
+        {isGM && darknessEl}
+
+        <Layer name="walls">
+          {showWalls &&
+            walls.map((w) => (
+              <Line
+                key={w.id}
+                name="wall"
+                points={[w.x1, w.y1, w.x2, w.y2]}
+                stroke={w.kind === "wall" ? "#5aa9e6" : w.kind === "door" ? "#e6a23c" : "#b678e0"}
+                strokeWidth={4 * k}
+                dash={w.kind !== "wall" && w.open ? [10 * k, 8 * k] : undefined}
+                lineCap="round"
+                hitStrokeWidth={14 * k}
+                listening={tool === "wall" && wallMode === "erase"}
+                onClick={(e) => {
+                  e.cancelBubble = true;
+                  onDeleteWall(w.id);
+                }}
+              />
+            ))}
+          {walls
+            .filter((w) => w.kind === "door" || (isGM && w.kind === "secret"))
+            .map((w) => (
+              <Group
+                key={`door-${w.id}`}
+                name="door"
+                x={(w.x1 + w.x2) / 2}
+                y={(w.y1 + w.y2) / 2}
+                scaleX={k}
+                scaleY={k}
+                listening={tool === "select" || tool === "wall"}
+                onClick={(e) => {
+                  e.cancelBubble = true;
+                  if (isGM && e.evt.shiftKey) onToggleLock(w.id);
+                  else onToggleDoor(w.id);
+                }}
+                onMouseEnter={(e) => (e.target.getStage()!.container().style.cursor = "pointer")}
+                onMouseLeave={(e) => (e.target.getStage()!.container().style.cursor = "")}
+              >
+                <Circle radius={11} fill={w.open ? "#2b2418" : "#13110f"} stroke={w.locked ? "#e06a5c" : w.kind === "secret" ? "#b678e0" : "#e6a23c"} strokeWidth={2} />
+                <Text text={w.locked ? "🔒" : w.open ? "▯" : "▮"} fontSize={11} width={22} height={22} x={-11} y={-10} align="center" verticalAlign="middle" fill="#f5ead2" listening={false} />
+              </Group>
+            ))}
+          {chain && tool === "wall" && cursor && (
+            <Line points={[chain.x, chain.y, cursor.x, cursor.y]} stroke="#5aa9e6" strokeWidth={3 * k} dash={[8 * k, 6 * k]} listening={false} />
+          )}
+          {chain && tool === "wall" && <Circle x={chain.x} y={chain.y} radius={5 * k} fill="#5aa9e6" listening={false} />}
+        </Layer>
 
         <Layer listening={false}>
           {tokens

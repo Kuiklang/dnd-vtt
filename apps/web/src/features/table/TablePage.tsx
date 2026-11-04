@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getBuiltinRuleset, type Capability, type FogShape } from "@vtt/rules";
+import { AMBIENT_LIGHTS, getBuiltinRuleset, type AmbientLight, type Capability, type FogShape, type Wall } from "@vtt/rules";
 import { Badge, Button, ErrorBanner, Loading, cx } from "../../components/ui";
 import { Avatar } from "../../components/Avatar";
 import { errorMessage } from "../../lib/api";
@@ -30,6 +30,8 @@ import { useJournal } from "../dmtools/useJournal";
 import { useTemplateStore } from "../templates/store";
 import { TemplateToolbar, TemplatePanel } from "../templates/TemplateControls";
 import type { MapTemplate } from "@vtt/rules";
+import { useVoice } from "../voice/useVoice";
+import { VoicePanel } from "../voice/VoicePanel";
 
 export function TablePage() {
   const { id = "" } = useParams();
@@ -58,6 +60,7 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
   const history = useTableHistory(useTable(detail.campaign.id, isGM, lobby.connection === "connected"));
   const table = history.table;
   const combat = useCombat(detail.campaign.id, lobby.connection === "connected");
+  const voice = useVoice(detail.campaign.id, lobby.connection === "connected");
   const canvasRef = useRef<MapCanvasHandle>(null);
   const [tool, setTool] = useState<Tool>("select");
   const [fogShape, setFogShape] = useState<FogShapeKind>("rect");
@@ -65,6 +68,8 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [templateHidden, setTemplateHidden] = useState(false);
+  const [wallMode, setWallMode] = useState<Wall["kind"] | "erase">("wall");
+  const [visionPreview, setVisionPreview] = useState(false);
   const templatePreset = useTemplateStore((s) => s.preset);
   const templateRequest = useTemplateStore((s) => s.request);
   const canTemplate = caps.has("token.controlOwn") || caps.has("map.manage");
@@ -132,7 +137,8 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
         deleteSelected();
       } else if (e.key === "Escape") {
         setSelectedId(null);
-        setTool("select");
+        // In the wall tool, Escape just ends the current wall chain (the canvas handles it).
+        setTool((cur) => (cur === "wall" ? cur : "select"));
       } else if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key.toLowerCase() === "z" || e.key.toLowerCase() === "y")) {
         e.preventDefault();
         if (e.key.toLowerCase() === "y" || e.shiftKey) void history.redo();
@@ -143,6 +149,7 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
         else if (k === "r") setTool("measure");
         else if (k === "f" && caps.has("fog.manage")) setTool("fog-reveal");
         else if (k === "t" && (caps.has("token.controlOwn") || caps.has("map.manage"))) setTool("template");
+        else if (k === "w" && caps.has("map.manage")) setTool("wall");
       }
     };
     const up = (e: KeyboardEvent) => {
@@ -258,6 +265,20 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
               ))}
           </>
         )}
+        {isGM && table.scene && (
+          <>
+            <ToolButton active={tool === "wall"} onClick={() => setTool(tool === "wall" ? "select" : "wall")} label={t("tool.wall")} icon="🧱" testId="tool-wall" />
+            {tool === "wall" &&
+              (
+                [
+                  ["wall", "▬", t("vision.kind.wall")],
+                  ["door", "🚪", t("vision.kind.door")],
+                  ["secret", "❔", t("vision.kind.secret")],
+                  ["erase", "⌫", t("vision.erase")],
+                ] as const
+              ).map(([m, icon, label]) => <ToolButton key={m} active={wallMode === m} onClick={() => setWallMode(m)} label={label} icon={icon} small testId={`wall-mode-${m}`} />)}
+          </>
+        )}
         {canTemplate && table.scene && (
           <>
             <ToolButton active={tool === "template"} onClick={() => setTool(tool === "template" ? "select" : "template")} label={t("tool.template")} icon="📐" testId="tool-template" />
@@ -284,6 +305,7 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
       </div>
       {tool === "measure" && <Hint>{t("measure.hint")}</Hint>}
       {tool === "template" && <Hint>{t("template.hint")}</Hint>}
+      {tool === "wall" && <Hint>{t(wallMode === "erase" ? "vision.eraseHint" : "vision.wallHint")}</Hint>}
 
       <div className="relative flex min-h-0 flex-1">
         {/* Left sidebar */}
@@ -293,6 +315,9 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
               <ScenePanel table={table} campaignId={detail.campaign.id} />
             </Section>
           )}
+          <Section title={t("voice.title")}>
+            <VoicePanel voice={voice} myName={detail.members.find((m) => m.userId === detail.me.userId)?.user.displayName ?? ""} />
+          </Section>
           <Section title={t("players.title")}>
             <ul className="space-y-1.5 text-sm">
               {detail.members.map((m) => {
@@ -347,6 +372,16 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
               onSelectTemplate={setSelectedTemplateId}
               onPlaceTemplate={onPlaceTemplate}
               onMoveTemplate={(tid, x, y) => void table.updateTemplate(tid, { x, y }).catch((e) => toast.error(errorMessage(e)))}
+              walls={table.walls}
+              wallMode={wallMode}
+              onAddWall={(seg) => void table.addWalls([seg], wallMode === "erase" ? "wall" : wallMode).catch((e) => toast.error(errorMessage(e)))}
+              onDeleteWall={(wid) => void table.deleteWalls([wid]).catch((e) => toast.error(errorMessage(e)))}
+              onToggleDoor={(wid) => void table.toggleDoor(wid).catch((e) => toast.error(errorMessage(e)))}
+              onToggleLock={(wid) => {
+                const w = table.walls.find((x) => x.id === wid);
+                if (w) void table.updateWall(wid, { locked: !w.locked }).catch((e) => toast.error(errorMessage(e)));
+              }}
+              visionPreviewId={isGM && visionPreview ? selectedId : null}
             />
           )}
         </div>
@@ -376,6 +411,7 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
               <TokenPanel table={table} detail={detail} isGM={isGM} selected={selected} combat={combat} ruleset={ruleset} characterTick={lobby.characterTick} onRoll={lobby.roll} dropPoint={dropPoint} onSelect={setSelectedId} />
             </Section>
           )}
+          {isGM && table.scene && <VisionPanel table={table} preview={visionPreview} onPreview={setVisionPreview} hasSelection={!!selected} />}
           {caps.has("fog.manage") && table.scene && <FogPanel table={table} />}
           {caps.has("dice.roll") && (
             <Section title="Dice">
@@ -424,7 +460,50 @@ function FogPanel({ table }: { table: Table }) {
             {t("fog.undo")}
           </Button>
         </div>
-        <p className="text-xs text-parchment-500">{t("notImplemented.lighting")}</p>
+      </div>
+    </Section>
+  );
+}
+
+/** DM: dynamic lighting on/off, ambient light, walls, and previewing a token's view. */
+function VisionPanel({ table, preview, onPreview, hasSelection }: { table: Table; preview: boolean; onPreview(v: boolean): void; hasSelection: boolean }) {
+  const t = useT();
+  const scene = table.scene!;
+  const vision = scene.vision ?? { enabled: false, ambient: "bright" as AmbientLight };
+  const run = (p: Promise<unknown>) => p.catch((e) => toast.error(errorMessage(e)));
+  const set = (v: Partial<typeof vision>) => run(table.updateScene(scene.id, { vision: { ...vision, ...v } }));
+  return (
+    <Section title={t("vision.title")}>
+      <div className="space-y-2 text-sm" data-testid="vision-panel">
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={vision.enabled} onChange={(e) => set({ enabled: e.target.checked })} data-testid="vision-enabled" />
+          {t("vision.enabled")}
+        </label>
+        <label className="flex items-center gap-2">
+          <span className="text-parchment-400">{t("vision.ambient")}</span>
+          <select
+            className="h-7 flex-1 rounded border border-ink-600 bg-ink-850 px-1.5 text-xs"
+            value={vision.ambient}
+            onChange={(e) => set({ ambient: e.target.value as AmbientLight })}
+            data-testid="vision-ambient"
+          >
+            {AMBIENT_LIGHTS.map((a) => (
+              <option key={a} value={a}>
+                {t(`vision.ambient.${a}`)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={cx("flex items-center gap-2", (!vision.enabled || !hasSelection) && "opacity-50")}>
+          <input type="checkbox" checked={preview} disabled={!vision.enabled} onChange={(e) => onPreview(e.target.checked)} data-testid="vision-preview" />
+          {t("vision.preview")}
+        </label>
+        <p className="text-xs text-parchment-500">{t("vision.walls", { n: table.walls.length })}</p>
+        {table.walls.length > 0 && (
+          <Button size="sm" variant="ghost" onClick={() => window.confirm(t("vision.clearConfirm")) && run(table.deleteWalls("all"))}>
+            {t("vision.clear")}
+          </Button>
+        )}
       </div>
     </Section>
   );
