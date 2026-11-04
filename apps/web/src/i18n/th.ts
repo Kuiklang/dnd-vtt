@@ -162,4 +162,13 @@ export const th: Partial<Record<MessageKey, string>> = {
   "vitals.resistances": "Resistances",
   "vitals.vulnerabilities": "Vulnerabilities",
   "vitals.immunities": "Immunities",
+  "rolls.title": "ทอย",
+  "rolls.mode": "โหมดการทอย",
+  "rolls.disadvantage": "Dis",
+  "rolls.normal": "ปกติ",
+  "rolls.advantage": "Adv",
+  "rolls.checks": "Checks",
+  "rolls.saves": "Saves",
+  "rolls.skill": "Skill check",
+  "rolls.openSheet": "เปิด character sheet",
 };

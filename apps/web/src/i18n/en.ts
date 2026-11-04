@@ -160,6 +160,15 @@ export const en = {
   "vitals.resistances": "Resistances",
   "vitals.vulnerabilities": "Vulnerabilities",
   "vitals.immunities": "Immunities",
+  "rolls.title": "Rolls",
+  "rolls.mode": "Roll mode",
+  "rolls.disadvantage": "Dis",
+  "rolls.normal": "Normal",
+  "rolls.advantage": "Adv",
+  "rolls.checks": "Checks",
+  "rolls.saves": "Saves",
+  "rolls.skill": "Skill check",
+  "rolls.openSheet": "Open character sheet",
 } as const;
 
 export type MessageKey = keyof typeof en;

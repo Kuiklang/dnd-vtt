@@ -10,6 +10,8 @@ import type { TokenDto } from "./types";
 import type { Table } from "./useTable";
 import type { Combat } from "./useCombat";
 import { VitalsPanel } from "./VitalsPanel";
+import { TokenRolls } from "./TokenRolls";
+import type { RollRequest } from "../lobby/useLobby";
 
 interface Props {
   table: Table;
@@ -18,12 +20,14 @@ interface Props {
   selected: TokenDto | null;
   combat: Combat;
   ruleset: RulesetDefinition | undefined;
+  characterTick: number;
+  onRoll(req: RollRequest): Promise<unknown>;
   dropPoint(): { x: number; y: number };
   onSelect(id: string | null): void;
 }
 
 /** Add tokens (GM: blank or party character; player: own character) and edit the selection. */
-export function TokenPanel({ table, detail, isGM, selected, combat, ruleset, dropPoint, onSelect }: Props) {
+export function TokenPanel({ table, detail, isGM, selected, combat, ruleset, characterTick, onRoll, dropPoint, onSelect }: Props) {
   const t = useT();
   const campaignId = detail.campaign.id;
   const myCharacterId = detail.me.activeCharacterId;
@@ -96,6 +100,9 @@ export function TokenPanel({ table, detail, isGM, selected, combat, ruleset, dro
           isGM={isGM}
           canControl={selected.ownerIds.includes(detail.me.userId)}
         />
+      )}
+      {selected?.characterId && (isGM || selected.ownerIds.includes(detail.me.userId)) && (
+        <TokenRolls characterId={selected.characterId} tick={characterTick} myCharacterId={myCharacterId} onRoll={onRoll} />
       )}
       {selected && isGM && <TokenEditor key={selected.id} token={selected} table={table} detail={detail} campaignId={campaignId} onSelect={onSelect} />}
     </div>

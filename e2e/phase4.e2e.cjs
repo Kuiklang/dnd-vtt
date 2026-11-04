@@ -187,6 +187,20 @@ async function waitFor(fn, msg, timeout = 8000) {
   const sheet = (await call(pl, "GET", `/api/characters/${created.id}`)).character;
   assert.deepEqual(sheet.data.hp, { current: 9, max: 12, temp: 0 });
 
+  // Rolls straight from the token, with the sheet's numbers; DM sees them in the log.
+  await pl.getByTestId("token-rolls").getByRole("button", { name: "Adv" }).click();
+  await pl.getByTestId("roll-check-dex").click();
+  await dm.getByText("Bram Ironfoot — Dexterity check").first().waitFor();
+  await pl.getByTestId("token-rolls").getByRole("button", { name: "Saves" }).click();
+  await pl.getByTestId("roll-save-con").click();
+  await dm.getByText("Bram Ironfoot — Constitution save").first().waitFor();
+  await pl.getByTestId("roll-skill").selectOption({ index: 1 });
+  await pl.getByTestId("open-sheet").click();
+  await pl.getByRole("dialog").waitFor();
+  await shot(pl, "p4-05-player-sheet-from-token");
+  await pl.keyboard.press("Escape");
+  await pl.getByRole("dialog").getByRole("button", { name: "Close" }).click().catch(() => {});
+
   // Bram's turn ends → poisoned (1 round) expires.
   await dm.getByTestId("combat-next").click(); // Goblin → Bram
   await pl.getByTestId("your-turn").waitFor();

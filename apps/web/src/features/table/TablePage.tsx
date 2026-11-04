@@ -243,7 +243,7 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
           )}
           {table.scene && (
             <Section title={t("tokens.title")}>
-              <TokenPanel table={table} detail={detail} isGM={isGM} selected={selected} combat={combat} ruleset={ruleset} dropPoint={dropPoint} onSelect={setSelectedId} />
+              <TokenPanel table={table} detail={detail} isGM={isGM} selected={selected} combat={combat} ruleset={ruleset} characterTick={lobby.characterTick} onRoll={lobby.roll} dropPoint={dropPoint} onSelect={setSelectedId} />
             </Section>
           )}
           {caps.has("fog.manage") && table.scene && <FogPanel table={table} />}
