@@ -23,7 +23,7 @@ export async function characterActionRoutes(app: FastifyInstance) {
     );
     const m = await campaigns.membership(id, user.id);
     const result = await actions.cast(m, charId, body);
-    if (result.slotSpent) app.ctx.realtime?.characterChanged(id, charId);
+    if (result.changed) app.ctx.realtime?.characterChanged(id, charId);
     return result;
   });
 
@@ -31,6 +31,17 @@ export async function characterActionRoutes(app: FastifyInstance) {
     const { user } = requireAuth(req);
     const { id } = parse(z.object({ id: z.uuid() }), req.params);
     return { characters: await actions.recipients(await campaigns.membership(id, user.id)) };
+  });
+
+  app.post("/api/campaigns/:id/characters/:charId/concentration/end", async (req) => {
+    const { user } = requireAuth(req);
+    const { id, charId } = parse(charParams, req.params);
+    const r = await actions.endConcentration(await campaigns.membership(id, user.id), charId);
+    if (r) {
+      await chat.system(id, `${r.name} stops concentrating on ${r.spell}`);
+      app.ctx.realtime?.characterChanged(id, r.id);
+    }
+    return { ended: r?.spell ?? null };
   });
 
   app.post("/api/campaigns/:id/characters/:charId/give", async (req) => {

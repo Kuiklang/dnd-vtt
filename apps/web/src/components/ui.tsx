@@ -170,10 +170,16 @@ export function Modal({ open, onClose, title, children, wide }: { open: boolean;
     // Only the top-most dialog closes, so Escape in a nested picker keeps the sheet open.
     const token = {};
     modalStack.push(token);
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && modalStack[modalStack.length - 1] === token && closeRef.current();
-    window.addEventListener("keydown", onKey);
+    // Capture phase + stopPropagation: the page's own shortcuts (e.g. Escape = deselect on the map)
+    // never see an Escape that closed a dialog.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || modalStack[modalStack.length - 1] !== token) return;
+      e.stopPropagation();
+      closeRef.current();
+    };
+    window.addEventListener("keydown", onKey, true);
     return () => {
-      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", onKey, true);
       modalStack.splice(modalStack.indexOf(token), 1);
     };
   }, [open]);

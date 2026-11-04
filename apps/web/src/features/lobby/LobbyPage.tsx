@@ -14,6 +14,7 @@ import { InvitePanel } from "./InvitePanel";
 import { CampaignSettingsModal } from "./CampaignSettingsModal";
 import { CharacterSheetLoader } from "../character/CharacterSheetLoader";
 import { sheetTableFor } from "../character/SpellActions";
+import { TimelinePanel } from "../timeline/TimelinePanel";
 import { DiceOverlay } from "../dice/DiceOverlay";
 import { DmToolkit, type ToolkitTab } from "../dmtools/DmToolkit";
 import { HandoutPopup } from "../dmtools/HandoutPopup";
@@ -53,6 +54,7 @@ function LobbyView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
   const [toolkit, setToolkit] = useState<{ open: boolean; tab: ToolkitTab }>({ open: false, tab: "journal" });
   const audio = useCampaignAudio(detail.campaign.id);
   const [musicOpen, setMusicOpen] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(false);
   const t = useT();
 
   return (
@@ -60,6 +62,7 @@ function LobbyView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
       <LobbyHeader lobby={lobby} detail={detail} caps={caps} onSettings={() => setSettingsOpen(true)} />
       <DiceOverlay roll={lobby.lastRoll} />
       <HandoutPopup campaignId={detail.campaign.id} />
+      <TimelinePanel open={timelineOpen} onClose={() => setTimelineOpen(false)} campaignId={detail.campaign.id} isDm={caps.has("session.control")} canEditEvents={caps.has("journal.manage")} />
       {caps.has("music.control") && <MusicPanel open={musicOpen} onClose={() => setMusicOpen(false)} campaignId={detail.campaign.id} audio={audio} />}
       <DmToolkit
         open={toolkit.open}
@@ -80,6 +83,9 @@ function LobbyView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
             🧰 {t("toolkit.title")}
           </Button>
         )}
+        <Button size="sm" variant="ghost" onClick={() => setTimelineOpen(true)} data-testid="lobby-timeline">
+          🕰 {t("timeline.open")}
+        </Button>
         {caps.has("music.control") && (
           <Button size="sm" variant="ghost" onClick={() => setMusicOpen(true)} data-testid="lobby-music">
             🎵 {t("audio.open")}

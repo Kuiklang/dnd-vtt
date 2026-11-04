@@ -344,3 +344,37 @@ export function GiveButton({ item, actions }: { item: CharacterData["inventory"]
     </>
   );
 }
+
+/** "Concentrating on X" with a Con save button and End. */
+export function ConcentrationBadge({ spell, onSave, onEnd }: { spell: string; onSave?: () => void; onEnd?: () => Promise<unknown> }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded border border-arcane-400/60 bg-arcane-500/10 px-2 py-1 text-xs" data-testid="concentration">
+      <span className="flex-1 text-parchment-100">
+        🔮 Concentrating on <b>{spell}</b>
+      </span>
+      {onSave && (
+        <button className="rounded border border-ink-600 px-1.5 py-0.5 hover:border-gold-500" onClick={onSave} data-testid="concentration-save">
+          Con save
+        </button>
+      )}
+      {onEnd && (
+        <button
+          className="rounded border border-ink-600 px-1.5 py-0.5 text-blood-400 hover:border-blood-400"
+          disabled={busy}
+          data-testid="concentration-end"
+          onClick={() => {
+            setBusy(true);
+            onEnd()
+              .catch((e) => toast.error(errorMessage(e)))
+              .finally(() => setBusy(false));
+          }}
+        >
+          End
+        </button>
+      )}
+    </div>
+  );
+}
+
+export const endConcentration = (campaignId: string, characterId: string) => api.post(`/api/campaigns/${campaignId}/characters/${characterId}/concentration/end`);

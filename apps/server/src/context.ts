@@ -10,6 +10,7 @@ import type { AssetService } from "./assets/service.js";
 import type { SceneService } from "./scenes/service.js";
 import type { CombatService } from "./combat/service.js";
 import type { DmToolsService } from "./dmtools/service.js";
+import type { TimelineService } from "./timeline/service.js";
 import type { AudioService } from "./audio/service.js";
 import type { CharacterActions } from "./characters/actions.js";
 
@@ -24,6 +25,7 @@ export interface AppContext {
   scenes: SceneService;
   combat: CombatService;
   dmTools: DmToolsService;
+  timeline: TimelineService;
   audio: AudioService;
   actions: CharacterActions;
   /** Set once Socket.IO is attached; services use it to broadcast REST-originated changes. */

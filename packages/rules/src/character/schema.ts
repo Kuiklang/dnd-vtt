@@ -132,6 +132,11 @@ export const characterDataSchema = z
     deathSaves: z.object({ successes: int(0, 3).default(0), failures: int(0, 3).default(0) }).default({ successes: 0, failures: 0 }),
     inspiration: z.boolean().default(false),
     conditions: z.array(conditionEntrySchema).max(30).default([]),
+    /** The spell this character is concentrating on (set when a concentration spell is cast). */
+    concentration: z
+      .object({ spell: shortText(100), spellId: shortText(60).default(""), since: z.string().max(40).default("") })
+      .nullable()
+      .default(null),
     /** Damage types (ruleset ids) this creature resists / is vulnerable to / ignores. */
     defenses: defensesSchema.default({ resistances: [], vulnerabilities: [], immunities: [] }),
     attacks: z.array(attackSchema).max(50).default([]),

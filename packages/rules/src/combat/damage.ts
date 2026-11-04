@@ -81,3 +81,11 @@ export function applyHp(hp: HpState, action: HpAction, defenses: Defenses = NO_D
     }
   }
 }
+
+/**
+ * DC of the Constitution save to keep concentrating after taking damage (SRD):
+ * 10 or half the damage taken, whichever is higher. Each source of damage is a separate save.
+ */
+export function concentrationSaveDc(damage: number): number {
+  return Math.max(10, Math.floor(Math.max(0, damage) / 2));
+}

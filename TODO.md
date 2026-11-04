@@ -121,7 +121,7 @@
 - [ ] วัดความยาวเพลงที่ server (ตอนนี้ใช้ค่าจากเบราว์เซอร์ที่อัปโหลด)
 - [ ] ให้ผู้เล่นขอเพลง / soundboard สำหรับผู้เล่น (ผ่าน permission override)
 
-## Phase 7 — Advanced 🟡 (รอบแรกเสร็จ)
+## Phase 7 — Advanced ✅
 
 - [x] คลังเวท SRD 5.1 (51 บท) + ค้นหา + เพิ่มลงชีต (`srdId` ลิงก์กับข้อมูลเวท)
 - [x] ร่ายเวทจากชีต: เลือก slot/upcast/ritual, server ใช้ slot ใต้ row lock, ทอย attack/damage/healing, โพสต์ DC/พื้นที่ลง log
@@ -129,11 +129,17 @@
 - [x] เพลงประจำฉาก (playlist/เพลง) เริ่มเมื่อแสดงฉาก
 - [x] ส่งไอเทมระหว่างตัวละคร (แบ่ง/รวม stack, ล็อกทั้งสองชีต)
 - [x] Tests: unit (spells, templates), integration `test/phase7.test.ts`, E2E `e2e/phase7.e2e.cjs`
-- [ ] ลากย้าย template
-- [ ] Concentration tracking อัตโนมัติ + หัก HP จากเวทบน token ที่โดน
+- [x] ลากย้าย template (รอบสอง)
+- [x] Concentration tracking: เริ่มเมื่อร่าย, DC Con save เมื่อโดนดาเมจ, หลุดที่ HP 0, ปุ่ม Con save / End
+- [ ] หัก HP จากเวทบน token ที่โดนอัตโนมัติ (ตอนนี้ DM ใช้ปุ่ม damage)
+- [ ] Concentration ของมอนสเตอร์ bestiary (ไม่มีชีต)
 - [ ] เวท SRD ครบทุกบท + เวท homebrew ในคลังของแคมเปญ
-- [ ] Undo/redo (map, token, fog)
-- [ ] Session recap + timeline
+- [x] Undo/redo ของตัวเอง: token (วาง/ย้าย/แก้/ลบ), หมอก, template — ปุ่ม + Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y
+- [ ] Undo ที่อยู่รอดหลังรีโหลด (เก็บประวัติที่ server)
+- [x] Session recap: ร่างจาก log สาธารณะ, แก้, เผยแพร่ให้ผู้เล่น
+- [x] Campaign timeline: เซสชัน + เหตุการณ์ในเรื่อง (วันที่ในโลกเกม, ผูกเซสชัน, เฉพาะ DM)
+- [ ] ร่าง recap ด้วย AI (Claude API ฝั่ง server) — ต้องตัดสินใจเรื่องค่าใช้จ่าย
+- [x] แก้: ร่ายเวทแบบซ่อนแจ้งเฉพาะ DM
 - [ ] Scene templates (export/import JSON)
 - [ ] Drawing tools + custom layers
 - [ ] Crossfade ระหว่างเพลง

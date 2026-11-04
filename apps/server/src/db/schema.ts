@@ -194,6 +194,9 @@ export const gameSessions = pgTable(
     startedBy: uuid("started_by").references(() => users.id, { onDelete: "set null" }),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     endedAt: timestamp("ended_at", { withTimezone: true }),
+    /** Phase 7: what happened, written by the DM (players see it once published). */
+    recap: text("recap").notNull().default(""),
+    recapPublished: boolean("recap_published").notNull().default(false),
   },
   (t) => [
     index("game_sessions_campaign_idx").on(t.campaignId),
@@ -618,3 +621,33 @@ export const mapTemplates = pgTable(
 );
 
 export type MapTemplateRow = typeof mapTemplates.$inferSelect;
+
+/*
+ * Phase 7: campaign timeline — story events the DM records (in-world date, optional
+ * link to the session it happened in). Sessions themselves also appear on the timeline.
+ */
+export const timelineVisibility = pgEnum("timeline_visibility", ["players", "dm"]);
+
+export const timelineEvents = pgTable(
+  "timeline_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    sessionId: uuid("session_id").references(() => gameSessions.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    body: text("body").notNull().default(""),
+    /** Free text: "Day 3, Month of Frost" — calendars differ per world. */
+    inWorldDate: text("in_world_date").notNull().default(""),
+    /** Order on the timeline (smaller first); new events go last. */
+    sortKey: integer("sort_key").notNull().default(0),
+    visibility: timelineVisibility("visibility").notNull().default("players"),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("timeline_events_campaign_idx").on(t.campaignId, t.sortKey)],
+);
+export type TimelineEventRow = typeof timelineEvents.$inferSelect;
+export type GameSessionRow = typeof gameSessions.$inferSelect;

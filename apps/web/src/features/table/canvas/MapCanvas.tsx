@@ -48,6 +48,8 @@ interface Props {
   selectedTemplateId: string | null;
   onSelectTemplate(id: string | null): void;
   onPlaceTemplate(t: MapTemplate): void;
+  /** Drag a template you own (or any, for the GM) to a new origin. */
+  onMoveTemplate(id: string, x: number, y: number): void;
 }
 
 interface View {
@@ -62,7 +64,21 @@ const layerOrder = (l: TokenDto["layer"]) => TOKEN_LAYERS.indexOf(l);
 
 export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(props, ref) {
   const { scene, tokens, fog, myId, isGM, tool, fogShape, spaceHeld, diagonal, selectedId, activeTokenId, defeatedIds, onSelect, onMoveToken, onFogShape } = props;
-  const { templates, templatePreset, selectedTemplateId, onSelectTemplate, onPlaceTemplate } = props;
+  const { templates: storedTemplates, templatePreset, selectedTemplateId, onSelectTemplate, onPlaceTemplate, onMoveTemplate } = props;
+  // While a template is dragged, its live position drives the hit rings.
+  // `settled`: dropped, waiting for the server to confirm (drawn at the new spot meanwhile).
+  const [dragging, setDragging] = useState<{ id: string; x: number; y: number; settled?: boolean } | null>(null);
+  useEffect(() => {
+    if (!dragging?.settled) return;
+    const base = storedTemplates.find((x) => x.id === dragging.id);
+    if (!base || (base.x === dragging.x && base.y === dragging.y)) setDragging(null);
+    const timer = setTimeout(() => setDragging(null), 3000);
+    return () => clearTimeout(timer);
+  }, [dragging, storedTemplates]);
+  const templates = useMemo(
+    () => (dragging ? storedTemplates.map((t) => (t.id === dragging.id ? { ...t, x: dragging.x, y: dragging.y } : t)) : storedTemplates),
+    [storedTemplates, dragging],
+  );
   const wrapRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
@@ -301,7 +317,27 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(p
 
         <Layer name="templates" listening={tool === "select"}>
           {templates.map((t) => (
-            <TemplateShape key={t.id} t={t} grid={scene.grid} k={k} selected={t.id === selectedTemplateId} isGM={isGM} onSelect={() => onSelectTemplate(t.id)} />
+            <TemplateShape
+              key={t.id}
+              t={dragging?.id === t.id && !dragging.settled ? storedTemplates.find((x) => x.id === t.id)! : t}
+              grid={scene.grid}
+              k={k}
+              selected={t.id === selectedTemplateId}
+              isGM={isGM}
+              onSelect={() => onSelectTemplate(t.id)}
+              draggable={tool === "select" && !spaceHeld && (isGM || t.ownerId === myId)}
+              onDrag={(dx, dy, done) => {
+                const base = storedTemplates.find((x) => x.id === t.id)!;
+                const nx = Math.round(Math.min(Math.max(base.x + dx, 0), scene.width));
+                const ny = Math.round(Math.min(Math.max(base.y + dy, 0), scene.height));
+                if (done) {
+                  if (nx !== base.x || ny !== base.y) {
+                    setDragging({ id: t.id, x: nx, y: ny, settled: true });
+                    onMoveTemplate(t.id, nx, ny);
+                  } else setDragging(null);
+                } else setDragging({ id: t.id, x: nx, y: ny });
+              }}
+            />
           ))}
           {aimed && <TemplateShape t={{ ...aimed, id: "aim", color: templatePreset.color, label: templatePreset.label, hidden: false }} grid={scene.grid} k={k} selected={false} isGM={isGM} />}
         </Layer>
@@ -375,14 +411,57 @@ export const MapCanvas = forwardRef<MapCanvasHandle, Props>(function MapCanvas(p
   );
 });
 
-function TemplateShape({ t, grid, k, selected, isGM, onSelect }: { t: MapTemplate & { id: string; color: string; label: string; hidden: boolean }; grid: SceneDto["grid"]; k: number; selected: boolean; isGM: boolean; onSelect?: () => void }) {
+function TemplateShape({
+  t,
+  grid,
+  k,
+  selected,
+  isGM,
+  onSelect,
+  draggable,
+  onDrag,
+}: {
+  t: MapTemplate & { id: string; color: string; label: string; hidden: boolean };
+  grid: SceneDto["grid"];
+  k: number;
+  selected: boolean;
+  isGM: boolean;
+  onSelect?: () => void;
+  draggable?: boolean;
+  onDrag?: (dx: number, dy: number, done: boolean) => void;
+}) {
   const pts = templateOutline(t, grid);
   // Label just above the shape's top edge, centred, so tokens inside don't cover it.
   const xs = pts.map((p) => p.x);
   const top = Math.min(...pts.map((p) => p.y));
   const labelAt = { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: top - 18 * k };
   return (
-    <Group name="template" id={t.id} onClick={onSelect} onTap={onSelect} opacity={t.hidden && isGM ? 0.6 : 1}>
+    <Group
+      name="template"
+      id={t.id}
+      onClick={onSelect}
+      onTap={onSelect}
+      opacity={t.hidden && isGM ? 0.6 : 1}
+      draggable={draggable}
+      onDragStart={(e) => {
+        e.cancelBubble = true;
+        onSelect?.();
+      }}
+      onDragMove={(e) => {
+        e.cancelBubble = true;
+        onDrag?.(e.target.x(), e.target.y(), false);
+      }}
+      onDragEnd={(e) => {
+        e.cancelBubble = true;
+        const dx = e.target.x();
+        const dy = e.target.y();
+        // The group snaps back; the template's stored origin moves instead.
+        e.target.position({ x: 0, y: 0 });
+        onDrag?.(dx, dy, true);
+      }}
+      onMouseEnter={(e) => draggable && (e.target.getStage()!.container().style.cursor = "move")}
+      onMouseLeave={(e) => (e.target.getStage()!.container().style.cursor = "")}
+    >
       <Line points={pts.flatMap((p) => [p.x, p.y])} closed fill={`${t.color}40`} stroke={selected ? "#ebcd7a" : t.color} strokeWidth={(selected ? 3 : 2) * k} dash={t.hidden ? [8 * k, 6 * k] : undefined} />
       {t.label && (
         <Text x={labelAt.x - 100 * k} y={labelAt.y} width={200} align="center" text={t.label} fontSize={13} fontStyle="bold" scaleX={k} scaleY={k} fill="#f5ead2" shadowColor="#000" shadowBlur={4} listening={false} />

@@ -14,6 +14,8 @@ import { MapCanvas, type MapCanvasHandle } from "./canvas/MapCanvas";
 import { ScenePanel } from "./ScenePanel";
 import { TokenPanel } from "./TokenPanel";
 import { useTable, type SaveStatus, type Table } from "./useTable";
+import { useTableHistory } from "./history";
+import { TimelinePanel } from "../timeline/TimelinePanel";
 import { useCombat } from "./useCombat";
 import { CombatPanel } from "./CombatPanel";
 import { DiceOverlay } from "../dice/DiceOverlay";
@@ -53,7 +55,8 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
   const t = useT();
   const caps = useMemo(() => new Set<Capability>(detail.me.capabilities), [detail.me.capabilities]);
   const isGM = caps.has("map.manage");
-  const table = useTable(detail.campaign.id, isGM, lobby.connection === "connected");
+  const history = useTableHistory(useTable(detail.campaign.id, isGM, lobby.connection === "connected"));
+  const table = history.table;
   const combat = useCombat(detail.campaign.id, lobby.connection === "connected");
   const canvasRef = useRef<MapCanvasHandle>(null);
   const [tool, setTool] = useState<Tool>("select");
@@ -130,6 +133,10 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
       } else if (e.key === "Escape") {
         setSelectedId(null);
         setTool("select");
+      } else if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key.toLowerCase() === "z" || e.key.toLowerCase() === "y")) {
+        e.preventDefault();
+        if (e.key.toLowerCase() === "y" || e.shiftKey) void history.redo();
+        else void history.undo();
       } else if (!e.ctrlKey && !e.metaKey && !e.altKey) {
         const k = e.key.toLowerCase();
         if (k === "v") setTool("select");
@@ -147,7 +154,7 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
     };
-  }, [deleteSelected, caps]);
+  }, [deleteSelected, caps, history.undo, history.redo]);
 
   const onFogShape = useCallback(
     (mode: "reveal" | "hide", shape: FogShape) => {
@@ -191,6 +198,7 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
   const [toolkit, setToolkit] = useState<{ open: boolean; tab: ToolkitTab }>({ open: false, tab: "journal" });
   const audio = useCampaignAudio(detail.campaign.id);
   const [musicOpen, setMusicOpen] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(false);
   const placeMany = useCallback(
     async (list: TokenInput[]) => {
       const points = dropPoints(list.length);
@@ -214,6 +222,7 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
     <div className="flex h-[calc(100vh-3.5rem)] flex-col">
       <DiceOverlay roll={lobby.lastRoll} />
       <HandoutPopup campaignId={detail.campaign.id} />
+      <TimelinePanel open={timelineOpen} onClose={() => setTimelineOpen(false)} campaignId={detail.campaign.id} isDm={caps.has("session.control")} canEditEvents={caps.has("journal.manage")} />
       {caps.has("music.control") && <MusicPanel open={musicOpen} onClose={() => setMusicOpen(false)} campaignId={detail.campaign.id} audio={audio} />}
       <DmToolkit
         open={toolkit.open}
@@ -255,12 +264,15 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
             {tool === "template" && <TemplateToolbar isGM={isGM} hidden={templateHidden} onHidden={setTemplateHidden} />}
           </>
         )}
+        <ToolButton active={false} onClick={() => void history.undo()} label={history.undoLabel ? t("history.undoThis", { what: history.undoLabel }) : t("history.undo")} icon="↶" testId="undo" disabled={!history.undoLabel} />
+        <ToolButton active={false} onClick={() => void history.redo()} label={history.redoLabel ? t("history.redoThis", { what: history.redoLabel }) : t("history.redo")} icon="↷" testId="redo" disabled={!history.redoLabel} />
         <ToolButton active={false} onClick={() => canvasRef.current?.fit()} label={t("tool.fit")} icon="⤢" />
         <div className="mx-2 h-5 w-px bg-ink-700" />
         <ToolButton active={toolkit.open && toolkit.tab === "journal"} onClick={() => setToolkit({ open: true, tab: "journal" })} label={t("toolkit.journal")} icon="📖" testId="open-journal" />
         {caps.has("npc.manage") && (
           <ToolButton active={toolkit.open && toolkit.tab !== "journal"} onClick={() => setToolkit((s) => ({ open: true, tab: s.tab === "journal" ? "bestiary" : s.tab }))} label={t("toolkit.title")} icon="🧰" testId="open-toolkit" />
         )}
+        <ToolButton active={timelineOpen} onClick={() => setTimelineOpen(true)} label={t("timeline.title")} icon="🕰" testId="open-timeline" />
         {caps.has("music.control") && (
           <ToolButton active={musicOpen} onClick={() => setMusicOpen(true)} label={t("audio.title")} icon="🎵" testId="open-music" />
         )}
@@ -334,6 +346,7 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
               selectedTemplateId={selectedTemplateId}
               onSelectTemplate={setSelectedTemplateId}
               onPlaceTemplate={onPlaceTemplate}
+              onMoveTemplate={(tid, x, y) => void table.updateTemplate(tid, { x, y }).catch((e) => toast.error(errorMessage(e)))}
             />
           )}
         </div>
@@ -417,7 +430,7 @@ function FogPanel({ table }: { table: Table }) {
   );
 }
 
-function ToolButton({ active, onClick, label, icon, small, testId }: { active: boolean; onClick(): void; label: string; icon: string; small?: boolean; testId?: string }) {
+function ToolButton({ active, onClick, label, icon, small, testId, disabled }: { active: boolean; onClick(): void; label: string; icon: string; small?: boolean; testId?: string; disabled?: boolean }) {
   return (
     <button
       type="button"
@@ -425,11 +438,13 @@ function ToolButton({ active, onClick, label, icon, small, testId }: { active: b
       aria-label={label}
       aria-pressed={active}
       onClick={onClick}
+      disabled={disabled}
       data-testid={testId}
       className={cx(
         "flex items-center justify-center rounded border",
         small ? "h-7 w-7 text-xs" : "h-8 w-8",
         active ? "border-gold-500 bg-gold-500/20 text-gold-300" : "border-ink-700 text-parchment-200 hover:bg-ink-800",
+        disabled && "cursor-not-allowed opacity-40 hover:bg-transparent",
       )}
     >
       {icon}
