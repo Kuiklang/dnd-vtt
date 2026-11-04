@@ -23,12 +23,14 @@ import { LocalDiskStorage, type Storage } from "./assets/storage.js";
 import { assetRoutes } from "./assets/routes.js";
 import { SceneService } from "./scenes/service.js";
 import { CombatService } from "./combat/service.js";
+import { extractorFromConfig, type SheetExtractor } from "./import/extractor.js";
+import { sheetImportRoutes } from "./import/routes.js";
 import { sceneRoutes } from "./scenes/routes.js";
 
 export async function buildApp(
   config: Config,
   db: Db,
-  opts: { realtime?: boolean; storage?: Storage } = {},
+  opts: { realtime?: boolean; storage?: Storage; sheetExtractor?: SheetExtractor | null } = {},
 ): Promise<FastifyInstance> {
   const app = Fastify({
     logger: config.NODE_ENV === "test" ? false : { level: config.NODE_ENV === "production" ? "info" : "debug" },
@@ -108,6 +110,7 @@ export async function buildApp(
   await app.register(chatRoutes);
   await app.register(assetRoutes);
   await app.register(sceneRoutes);
+  await app.register(sheetImportRoutes, { extractor: opts.sheetExtractor !== undefined ? opts.sheetExtractor : extractorFromConfig(config) });
 
   if (config.WEB_DIST && existsSync(config.WEB_DIST)) {
     await app.register(fastifyStatic, { root: path.resolve(config.WEB_DIST) });

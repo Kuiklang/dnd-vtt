@@ -244,6 +244,11 @@ function CharacterLibrary() {
           <Button size="sm" variant="ghost" onClick={() => fileRef.current?.click()} title="Import a character exported as JSON">
             Import JSON
           </Button>
+          <Link to="/characters/import" data-testid="import-sheet-link">
+            <Button size="sm" variant="ghost" title="Read a character sheet from a PDF or photo">
+              Import PDF / photo
+            </Button>
+          </Link>
         </>
       }
     >

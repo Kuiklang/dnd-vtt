@@ -10,13 +10,14 @@ import { runMigrations } from "../src/db/migrate.js";
 
 export const TEST_DB_URL = process.env.TEST_DATABASE_URL ?? "postgres://postgres@localhost:5432/vtt_test";
 
-export async function setupApp(opts: { realtime?: boolean } = {}) {
+export async function setupApp(opts: Parameters<typeof buildApp>[2] = {}, env: Record<string, string> = {}) {
   const config = loadConfig({
     NODE_ENV: "test",
     DATABASE_URL: TEST_DB_URL,
     RATE_LIMIT: "off",
     WEB_ORIGIN: "http://localhost:5173",
     UPLOAD_DIR: mkdtempSync(path.join(tmpdir(), "vtt-uploads-")),
+    ...env,
   });
   const { db, pool } = createDb(TEST_DB_URL);
   await db.execute(sql`drop schema if exists public cascade`);
@@ -103,7 +104,7 @@ function crc32(buf: Buffer): number {
 }
 
 /** Uploads a file through the real multipart endpoint. */
-export async function upload(app: FastifyInstance, c: Client, fields: Record<string, string>, file: Buffer, filename = "map.png") {
+export async function upload(app: FastifyInstance, c: Client, fields: Record<string, string>, file: Buffer, filename = "map.png", url = "/api/assets") {
   const boundary = "----vtttest" + Math.random().toString(16).slice(2);
   const parts: Buffer[] = [];
   for (const [k, v] of Object.entries(fields)) {
@@ -113,7 +114,7 @@ export async function upload(app: FastifyInstance, c: Client, fields: Record<str
   parts.push(file, Buffer.from(`\r\n--${boundary}--\r\n`));
   return app.inject({
     method: "POST",
-    url: "/api/assets",
+    url,
     headers: { cookie: c.cookie, "content-type": `multipart/form-data; boundary=${boundary}` },
     payload: Buffer.concat(parts),
   });

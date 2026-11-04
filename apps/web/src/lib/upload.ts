@@ -21,3 +21,19 @@ export async function uploadImage(file: File, kind: "map" | "token" | "portrait"
   }
   return json.asset;
 }
+
+/** Posts fields + one file as multipart and returns the JSON body (errors become ApiError). */
+export async function postMultipart<T>(url: string, fields: Record<string, string>, file: File): Promise<T> {
+  const form = new FormData();
+  for (const [k, v] of Object.entries(fields)) form.append(k, v);
+  form.append("file", file);
+  let res: Response;
+  try {
+    res = await fetch(url, { method: "POST", body: form, credentials: "same-origin" });
+  } catch {
+    throw new ApiError(0, "offline", "Can't reach the server. Check your connection.");
+  }
+  const json = (await res.json().catch(() => null)) as (T & { error?: { code?: string; message?: string } }) | null;
+  if (!res.ok || !json) throw new ApiError(res.status, json?.error?.code ?? "error", json?.error?.message ?? `Request failed (${res.status})`);
+  return json;
+}
