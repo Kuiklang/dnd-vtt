@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  doublePrecision,
+  real,
   index,
   integer,
   jsonb,
@@ -11,7 +13,8 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { CharacterData, RollResult } from "@vtt/rules";
+import type { CharacterData, FogShape, GridSettings, RollResult } from "@vtt/rules";
+
 
 /*
  * Phase 1 schema. Conventions:
@@ -32,6 +35,10 @@ export const campaignPrivacy = pgEnum("campaign_privacy", ["public", "invite_onl
 export const characterKind = pgEnum("character_kind", ["pc", "npc", "monster"]);
 export const chatChannel = pgEnum("chat_channel", ["global", "party", "dm", "whisper", "system"]);
 export const rollVisibility = pgEnum("roll_visibility", ["public", "private", "dm_only", "whisper", "blind"]);
+export const assetKind = pgEnum("asset_kind", ["map", "token", "portrait", "avatar", "cover", "handout", "other"]);
+export const tokenLayer = pgEnum("token_layer", ["map", "objects", "tokens", "dm"]);
+export const tokenShape = pgEnum("token_shape", ["circle", "square"]);
+export const fogMode = pgEnum("fog_mode", ["reveal", "hide"]);
 export const gameSessionStatus = pgEnum("game_session_status", ["active", "paused", "ended"]);
 
 export const users = pgTable(
@@ -96,6 +103,8 @@ export const campaigns = pgTable(
     passwordHash: text("password_hash"),
     houseRules: text("house_rules").notNull().default(""),
     settings: jsonb("settings").$type<CampaignSettings>().notNull().default({}),
+    /** Scene players currently see (no FK to avoid a campaigns<->scenes cycle; validated in code). */
+    activeSceneId: uuid("active_scene_id"),
     version: integer("version").notNull().default(1),
     ...timestamps,
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
@@ -235,6 +244,110 @@ export const chatMessages = pgTable(
   },
   (t) => [index("chat_messages_campaign_created_idx").on(t.campaignId, t.createdAt)],
 );
+
+/*
+ * Phase 2: assets, scenes (maps), tokens, fog.
+ */
+
+export const assets = pgTable(
+  "assets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Null = personal asset (avatar/portrait); set = campaign asset readable by members. */
+    campaignId: uuid("campaign_id").references(() => campaigns.id, { onDelete: "cascade" }),
+    kind: assetKind("kind").notNull(),
+    mime: text("mime").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    width: integer("width"),
+    height: integer("height"),
+    /** Opaque key inside the storage backend. */
+    storageKey: text("storage_key").notNull(),
+    sha256: text("sha256").notNull(),
+    originalName: text("original_name").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [index("assets_owner_idx").on(t.ownerId), index("assets_campaign_idx").on(t.campaignId)],
+);
+
+export const scenes = pgTable(
+  "scenes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    backgroundAssetId: uuid("background_asset_id").references(() => assets.id, { onDelete: "set null" }),
+    backgroundColor: text("background_color").notNull().default("#1a1714"),
+    width: integer("width").notNull(),
+    height: integer("height").notNull(),
+    grid: jsonb("grid").$type<GridSettings>().notNull(),
+    fogEnabled: boolean("fog_enabled").notNull().default(false),
+    dmNotes: text("dm_notes").notNull().default(""),
+    sortOrder: integer("sort_order").notNull().default(0),
+    version: integer("version").notNull().default(1),
+    ...timestamps,
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (t) => [index("scenes_campaign_idx").on(t.campaignId)],
+);
+
+export const tokens = pgTable(
+  "tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sceneId: uuid("scene_id")
+      .notNull()
+      .references(() => scenes.id, { onDelete: "cascade" }),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    characterId: uuid("character_id").references(() => characters.id, { onDelete: "set null" }),
+    name: text("name").notNull(),
+    imageAssetId: uuid("image_asset_id").references(() => assets.id, { onDelete: "set null" }),
+    x: doublePrecision("x").notNull(),
+    y: doublePrecision("y").notNull(),
+    size: real("size").notNull().default(1),
+    rotation: real("rotation").notNull().default(0),
+    layer: tokenLayer("layer").notNull().default("tokens"),
+    shape: tokenShape("shape").notNull().default("circle"),
+    color: text("color").notNull().default("#7d241c"),
+    borderColor: text("border_color").notNull().default("#d9b14f"),
+    hidden: boolean("hidden").notNull().default(false),
+    locked: boolean("locked").notNull().default(false),
+    showName: boolean("show_name").notNull().default(true),
+    ownerIds: uuid("owner_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    version: integer("version").notNull().default(1),
+    ...timestamps,
+  },
+  (t) => [index("tokens_scene_idx").on(t.sceneId), index("tokens_campaign_idx").on(t.campaignId)],
+);
+
+export const fogOps = pgTable(
+  "fog_ops",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sceneId: uuid("scene_id")
+      .notNull()
+      .references(() => scenes.id, { onDelete: "cascade" }),
+    /** Global, gap-tolerant insertion order; fog ops apply in seq order within a scene. */
+    seq: integer("seq").generatedAlwaysAsIdentity(),
+    mode: fogMode("mode").notNull(),
+    shape: jsonb("shape").$type<FogShape>().notNull(),
+    createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("fog_ops_scene_seq_idx").on(t.sceneId, t.seq)],
+);
+
+export type AssetRow = typeof assets.$inferSelect;
+export type SceneRow = typeof scenes.$inferSelect;
+export type TokenRow = typeof tokens.$inferSelect;
+export type FogOpRow = typeof fogOps.$inferSelect;
 
 export type User = typeof users.$inferSelect;
 export type Campaign = typeof campaigns.$inferSelect;

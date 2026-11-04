@@ -242,6 +242,7 @@ export class CampaignService {
       campaign: {
         ...publicCampaign(m.campaign),
         houseRules: m.campaign.houseRules,
+        activeSceneId: m.campaign.activeSceneId,
         ...(m.caps.has("campaign.edit") ? { permissions: m.campaign.settings.permissions ?? {} } : {}),
       },
       me: { userId: m.member.userId, role: m.role, capabilities: [...m.caps], activeCharacterId: m.member.activeCharacterId },
@@ -535,6 +536,14 @@ export class CampaignService {
       .from(campaignMembers)
       .where(eq(campaignMembers.campaignId, campaignId));
     return new Map(rows.map((r) => [r.userId, r.role]));
+  }
+
+  /** Effective capabilities of every member (role + campaign permission overrides). */
+  async memberCaps(campaignId: string): Promise<Map<string, Set<Capability>>> {
+    const [campaign] = await this.db.select({ settings: campaigns.settings }).from(campaigns).where(eq(campaigns.id, campaignId));
+    const overrides = sanitizePermissionOverrides(campaign?.settings.permissions);
+    const roles = await this.memberRoles(campaignId);
+    return new Map([...roles].map(([userId, role]) => [userId, resolveCapabilities(role, overrides)]));
   }
 
   async membersByIds(campaignId: string, ids: string[]) {

@@ -13,6 +13,8 @@ const envSchema = z.object({
     .transform((v) => v === "true"),
   /** Directory of the built web app to serve (single-process production deploy). */
   WEB_DIST: z.string().optional(),
+  /** Local disk directory for uploaded files (maps, tokens, portraits). */
+  UPLOAD_DIR: z.string().default("./data/uploads"),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   GUEST_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(7),
   /** Disable rate limiting (tests only). */

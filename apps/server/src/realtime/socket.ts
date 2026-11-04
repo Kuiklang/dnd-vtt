@@ -1,7 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { Server, type Socket } from "socket.io";
 import { z } from "zod";
-import { CHAT_CHANNELS, ROLL_VISIBILITIES, canSeeChatMessage, type CampaignRole } from "@vtt/rules";
+import { CHAT_CHANNELS, FOG_SHAPES, ROLL_VISIBILITIES, canSeeChatMessage, canSeeToken, type CampaignRole, type FogShape } from "@vtt/rules";
+import { tokenFields } from "../scenes/routes.js";
+import { toSceneDto, toTokenDto, type TokenDto } from "../scenes/service.js";
 import { SESSION_COOKIE, type AppContext } from "../context.js";
 import { HttpError } from "../lib/errors.js";
 import { rollForViewer, viewerFor, type ChatMessageDto, type RollDto } from "../chat/service.js";
@@ -28,10 +30,13 @@ interface SocketData {
   userId: string;
   displayName: string;
   campaigns: Set<string>;
+  /** Scene each campaign view is showing on this socket (campaignId -> sceneId). */
+  scenes: Map<string, string>;
   bucket: { tokens: number; updated: number };
 }
 
 const room = (campaignId: string) => `campaign:${campaignId}`;
+const sceneRoom = (sceneId: string) => `scene:${sceneId}`;
 const userRoom = (userId: string) => `user:${userId}`;
 
 /** Grace period before a disconnected player is shown as offline. */
@@ -53,6 +58,14 @@ const rollSchema = campaignIdSchema.extend({
   rollType: z.enum(["custom", "check", "save", "skill", "attack", "damage", "initiative", "healing"]).default("custom"),
   characterId: z.uuid().nullable().optional(),
 });
+
+const sceneRef = campaignIdSchema.extend({ sceneId: z.uuid() });
+const point = z.object({ x: z.number(), y: z.number() });
+const fogShapeSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal(FOG_SHAPES[0]), x: z.number(), y: z.number(), width: z.number(), height: z.number() }),
+  z.object({ kind: z.literal(FOG_SHAPES[1]), x: z.number(), y: z.number(), radius: z.number() }),
+  z.object({ kind: z.literal(FOG_SHAPES[2]), points: z.array(point).min(3).max(200) }),
+]);
 
 export class Realtime {
   readonly io: Server;
@@ -85,7 +98,8 @@ export class Realtime {
         data.userId = session.user.id;
         data.displayName = session.user.displayName;
         data.campaigns = new Set();
-        data.bucket = { tokens: 30, updated: Date.now() };
+        data.scenes = new Map();
+        data.bucket = { tokens: 60, updated: Date.now() };
         next();
       } catch {
         next(new Error("unauthorized"));
@@ -146,7 +160,7 @@ export class Realtime {
   private rateLimited(s: Socket): boolean {
     const b = (s.data as SocketData).bucket;
     const now = Date.now();
-    b.tokens = Math.min(30, b.tokens + ((now - b.updated) / 1000) * 5);
+    b.tokens = Math.min(60, b.tokens + ((now - b.updated) / 1000) * 15);
     b.updated = now;
     if (b.tokens < 1) return true;
     b.tokens -= 1;
@@ -226,6 +240,72 @@ export class Realtime {
       return rollForViewer(dto, viewerFor(data.userId, m.role));
     });
 
+    // ---- Scenes / tokens / fog -------------------------------------------
+
+    const { scenes } = this.ctx;
+
+    this.handle(s, "scene:join", sceneRef, async ({ campaignId, sceneId }) => {
+      const m = await campaigns.membership(campaignId, data.userId);
+      const state = await scenes.stateFor(m, sceneId);
+      const prev = data.scenes.get(campaignId);
+      if (prev && prev !== sceneId) await s.leave(sceneRoom(prev));
+      await s.join(sceneRoom(sceneId));
+      data.scenes.set(campaignId, sceneId);
+      return state;
+    });
+
+    this.handle(s, "scene:leave", sceneRef, async ({ campaignId, sceneId }) => {
+      if (data.scenes.get(campaignId) === sceneId) data.scenes.delete(campaignId);
+      await s.leave(sceneRoom(sceneId));
+    });
+
+    this.handle(s, "token:create", sceneRef.extend({ token: tokenFields.partial().required({ x: true, y: true }) }), async (i) => {
+      const m = await campaigns.membership(i.campaignId, data.userId);
+      const dto = await scenes.createToken(m, i.sceneId, i.token);
+      await this.broadcastToken(i.campaignId, i.sceneId, dto);
+      return dto;
+    });
+
+    this.handle(s, "token:update", sceneRef.extend({ tokenId: z.uuid(), patch: tokenFields.partial() }), async (i) => {
+      const m = await campaigns.membership(i.campaignId, data.userId);
+      const dto = await scenes.updateToken(m, i.sceneId, i.tokenId, i.patch);
+      await this.broadcastToken(i.campaignId, i.sceneId, dto);
+      return dto;
+    });
+
+    this.handle(s, "token:delete", sceneRef.extend({ tokenId: z.uuid() }), async (i) => {
+      const m = await campaigns.membership(i.campaignId, data.userId);
+      const dto = await scenes.deleteToken(m, i.sceneId, i.tokenId);
+      this.io.to(sceneRoom(i.sceneId)).emit("token:remove", { sceneId: i.sceneId, tokenId: dto.id });
+      return { id: dto.id };
+    });
+
+    this.handle(s, "fog:add", sceneRef.extend({ mode: z.enum(["reveal", "hide"]), shape: fogShapeSchema }), async (i) => {
+      const m = await campaigns.membership(i.campaignId, data.userId);
+      const op = await scenes.addFog(m, i.sceneId, i.mode, i.shape as FogShape);
+      await this.sendSceneState(i.campaignId, i.sceneId);
+      return op;
+    });
+
+    this.handle(s, "fog:reset", sceneRef.extend({ mode: z.enum(["reveal", "hide"]) }), async (i) => {
+      const m = await campaigns.membership(i.campaignId, data.userId);
+      await scenes.resetFog(m, i.sceneId, i.mode);
+      await this.sendSceneState(i.campaignId, i.sceneId);
+    });
+
+    this.handle(s, "fog:undo", sceneRef, async (i) => {
+      const m = await campaigns.membership(i.campaignId, data.userId);
+      const undone = await scenes.undoFog(m, i.sceneId);
+      if (undone) await this.sendSceneState(i.campaignId, i.sceneId);
+      return { undone };
+    });
+
+    this.handle(s, "fog:enable", sceneRef.extend({ enabled: z.boolean() }), async (i) => {
+      const m = await campaigns.membership(i.campaignId, data.userId);
+      await scenes.setFogEnabled(m, i.sceneId, i.enabled);
+      await this.sendSceneState(i.campaignId, i.sceneId);
+    });
+
     s.on("disconnect", () => {
       for (const campaignId of data.campaigns) this.removePresence(campaignId, data.userId, s.id, false);
     });
@@ -235,6 +315,9 @@ export class Realtime {
     const data = s.data as SocketData;
     void s.leave(room(campaignId));
     data.campaigns.delete(campaignId);
+    const sceneId = data.scenes.get(campaignId);
+    if (sceneId) void s.leave(sceneRoom(sceneId));
+    data.scenes.delete(campaignId);
     this.removePresence(campaignId, data.userId, s.id, graceful);
   }
 
@@ -267,6 +350,82 @@ export class Realtime {
     void this.tailored(roll.campaignId, "dice:roll", (userId, role) => rollForViewer(roll, viewerFor(userId, role))).catch(
       (err) => this.app.log.error({ err }, "broadcastRoll failed"),
     );
+  }
+
+  // ---- Scene broadcasts ---------------------------------------------------
+
+  /** Sockets currently viewing a scene, with their effective capabilities. */
+  private async sceneViewers(campaignId: string, sceneId: string) {
+    const [sockets, caps] = await Promise.all([this.io.in(sceneRoom(sceneId)).fetchSockets(), this.ctx.campaigns.memberCaps(campaignId)]);
+    return sockets.flatMap((sock) => {
+      const userId = (sock.data as SocketData).userId;
+      const c = caps.get(userId);
+      return c ? [{ sock, userId, caps: c }] : [];
+    });
+  }
+
+  /** Sends a token change to each viewer, or a removal to viewers who must no longer see it. */
+  async broadcastToken(campaignId: string, sceneId: string, dto: TokenDto) {
+    try {
+      const scene = await this.ctx.scenes.viewableRaw(campaignId, sceneId);
+      if (!scene) return;
+      const { state } = await this.ctx.scenes.fogState(scene);
+      for (const v of await this.sceneViewers(campaignId, sceneId)) {
+        const viewer = { userId: v.userId, isGameMaster: v.caps.has("token.manageAll") };
+        if (canSeeToken(dto, viewer, state)) v.sock.emit("token:upsert", dto);
+        else v.sock.emit("token:remove", { sceneId, tokenId: dto.id });
+      }
+    } catch (err) {
+      this.app.log.error({ err }, "broadcastToken failed");
+    }
+  }
+
+  /** Pushes the full, per-viewer filtered scene state (after fog/scene changes). */
+  async sendSceneState(campaignId: string, sceneId: string) {
+    try {
+      const scene = await this.ctx.scenes.viewableRaw(campaignId, sceneId);
+      if (!scene) return;
+      const [{ state, ops }, rows, activeSceneId] = await Promise.all([
+        this.ctx.scenes.fogState(scene),
+        this.ctx.scenes.tokenRows(sceneId),
+        this.ctx.scenes.activeSceneId(campaignId),
+      ]);
+      const all = rows.map((r) => toTokenDto(r.token, r.portraitUrl));
+      for (const v of await this.sceneViewers(campaignId, sceneId)) {
+        const isGM = v.caps.has("token.manageAll");
+        if (!v.caps.has("map.manage") && activeSceneId !== sceneId) {
+          v.sock.leave(sceneRoom(sceneId));
+          continue;
+        }
+        const viewer = { userId: v.userId, isGameMaster: isGM };
+        v.sock.emit("scene:state", {
+          scene: toSceneDto(scene, activeSceneId, v.caps.has("dmNotes.view")),
+          tokens: all.filter((t) => canSeeToken(t, viewer, state)),
+          fog: ops,
+        });
+      }
+    } catch (err) {
+      this.app.log.error({ err }, "sendSceneState failed");
+    }
+  }
+
+  scenesChanged(campaignId: string) {
+    this.io.to(room(campaignId)).emit("scenes:changed", { campaignId });
+  }
+
+  /** Moves players to the new active scene and evicts non-GMs from the previous one. */
+  async sceneActivated(campaignId: string, previous: string | null, sceneId: string | null) {
+    if (previous && previous !== sceneId) {
+      for (const v of await this.sceneViewers(campaignId, previous)) {
+        if (!v.caps.has("map.manage")) v.sock.leave(sceneRoom(previous));
+      }
+    }
+    this.io.to(room(campaignId)).emit("scene:activated", { campaignId, sceneId });
+  }
+
+  async sceneDeleted(campaignId: string, sceneId: string) {
+    this.io.to(sceneRoom(sceneId)).emit("scene:deleted", { campaignId, sceneId });
+    this.io.in(sceneRoom(sceneId)).socketsLeave(sceneRoom(sceneId));
   }
 
   /** Tells clients to refetch campaign detail (they re-fetch through permission-checked REST). */

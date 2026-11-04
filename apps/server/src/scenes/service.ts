@@ -1,0 +1,534 @@
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import {
+  DEFAULT_GRID,
+  MAX_FOG_OPS,
+  OWNER_EDITABLE_FIELDS,
+  canControlToken,
+  canSeeToken,
+  normalizeShape,
+  type FogShape,
+  type FogState,
+  type GridSettings,
+  type TokenLayer,
+  type TokenShape,
+  type TokenState,
+  type TokenViewer,
+} from "@vtt/rules";
+import type { Db } from "../db/client.js";
+import { campaigns, characters, fogOps, scenes, tokens, type SceneRow, type TokenRow } from "../db/schema.js";
+import { badRequest, conflict, forbidden, notFound } from "../lib/errors.js";
+import type { CampaignService, Membership } from "../campaigns/service.js";
+import { assetUrl, type AssetService } from "../assets/service.js";
+
+export const MAX_SCENES_PER_CAMPAIGN = 200;
+export const MAX_TOKENS_PER_SCENE = 500;
+/** Scenes are capped so a typo can't allocate an absurd canvas on every client. */
+export const MAX_SCENE_PX = 16384;
+
+export interface SceneDto {
+  id: string;
+  campaignId: string;
+  name: string;
+  backgroundUrl: string | null;
+  backgroundAssetId: string | null;
+  backgroundColor: string;
+  width: number;
+  height: number;
+  grid: GridSettings;
+  fogEnabled: boolean;
+  /** Only present for viewers with dmNotes.view. */
+  dmNotes?: string;
+  sortOrder: number;
+  version: number;
+  isActive: boolean;
+  updatedAt: string;
+}
+
+export interface TokenDto extends TokenState {
+  imageUrl: string | null;
+}
+
+export interface FogOpDto {
+  id: string;
+  mode: "reveal" | "hide";
+  shape: FogShape;
+}
+
+export interface SceneState {
+  scene: SceneDto;
+  tokens: TokenDto[];
+  fog: FogOpDto[];
+}
+
+export interface SceneInput {
+  name: string;
+  backgroundAssetId: string | null;
+  backgroundColor: string;
+  width: number;
+  height: number;
+  grid: Partial<GridSettings>;
+  fogEnabled: boolean;
+  dmNotes: string;
+  sortOrder: number;
+}
+
+export interface TokenInput {
+  characterId: string | null;
+  name: string;
+  imageAssetId: string | null;
+  x: number;
+  y: number;
+  size: number;
+  rotation: number;
+  layer: TokenLayer;
+  shape: TokenShape;
+  color: string;
+  borderColor: string;
+  hidden: boolean;
+  locked: boolean;
+  showName: boolean;
+  ownerIds: string[];
+}
+
+export const viewerOf = (m: Membership): TokenViewer => ({ userId: m.member.userId, isGameMaster: m.caps.has("token.manageAll") });
+
+export function toSceneDto(s: SceneRow, activeSceneId: string | null, showNotes: boolean): SceneDto {
+  return {
+    id: s.id,
+    campaignId: s.campaignId,
+    name: s.name,
+    backgroundUrl: s.backgroundAssetId ? assetUrl(s.backgroundAssetId) : null,
+    backgroundAssetId: s.backgroundAssetId,
+    backgroundColor: s.backgroundColor,
+    width: s.width,
+    height: s.height,
+    grid: s.grid,
+    fogEnabled: s.fogEnabled,
+    ...(showNotes ? { dmNotes: s.dmNotes } : {}),
+    sortOrder: s.sortOrder,
+    version: s.version,
+    isActive: s.id === activeSceneId,
+    updatedAt: s.updatedAt.toISOString(),
+  };
+}
+
+export function toTokenDto(t: TokenRow, portraitUrl?: string | null): TokenDto {
+  return {
+    id: t.id,
+    sceneId: t.sceneId,
+    characterId: t.characterId,
+    name: t.name,
+    imageAssetId: t.imageAssetId,
+    imageUrl: t.imageAssetId ? assetUrl(t.imageAssetId) : portraitUrl || null,
+    x: t.x,
+    y: t.y,
+    size: t.size,
+    rotation: t.rotation,
+    layer: t.layer,
+    shape: t.shape,
+    color: t.color,
+    borderColor: t.borderColor,
+    hidden: t.hidden,
+    locked: t.locked,
+    showName: t.showName,
+    ownerIds: t.ownerIds,
+    version: t.version,
+  };
+}
+
+export class SceneService {
+  constructor(
+    private readonly db: Db,
+    private readonly campaigns: CampaignService,
+    private readonly assets: AssetService,
+  ) {}
+
+  // ---- Scenes ------------------------------------------------------------
+
+  private async sceneRow(campaignId: string, sceneId: string): Promise<SceneRow> {
+    const [row] = await this.db
+      .select()
+      .from(scenes)
+      .where(and(eq(scenes.id, sceneId), eq(scenes.campaignId, campaignId), isNull(scenes.deletedAt)))
+      .limit(1);
+    if (!row) throw notFound("Scene");
+    return row;
+  }
+
+  /** Scene row without permission checks (realtime broadcast use only). */
+  async viewableRaw(campaignId: string, sceneId: string): Promise<SceneRow | null> {
+    return this.sceneRow(campaignId, sceneId).catch(() => null);
+  }
+
+  async activeSceneId(campaignId: string): Promise<string | null> {
+    const [c] = await this.db.select({ id: campaigns.activeSceneId }).from(campaigns).where(eq(campaigns.id, campaignId));
+    return c?.id ?? null;
+  }
+
+  /** Loads a scene the viewer may open: GMs any scene, others only the active one. */
+  async viewable(m: Membership, sceneId: string): Promise<SceneRow> {
+    const row = await this.sceneRow(m.campaign.id, sceneId);
+    if (!m.caps.has("map.manage") && m.campaign.activeSceneId !== row.id) throw notFound("Scene");
+    return row;
+  }
+
+  async list(m: Membership): Promise<SceneDto[]> {
+    const showNotes = m.caps.has("dmNotes.view");
+    if (!m.caps.has("map.manage")) {
+      if (!m.campaign.activeSceneId) return [];
+      const row = await this.sceneRow(m.campaign.id, m.campaign.activeSceneId).catch(() => null);
+      return row ? [toSceneDto(row, m.campaign.activeSceneId, showNotes)] : [];
+    }
+    const rows = await this.db
+      .select()
+      .from(scenes)
+      .where(and(eq(scenes.campaignId, m.campaign.id), isNull(scenes.deletedAt)))
+      .orderBy(asc(scenes.sortOrder), asc(scenes.createdAt));
+    return rows.map((r) => toSceneDto(r, m.campaign.activeSceneId, showNotes));
+  }
+
+  async create(m: Membership, input: Partial<SceneInput> & { name: string }): Promise<SceneRow> {
+    if (!m.caps.has("map.manage")) throw forbidden("Only the DM can create maps");
+    const [{ n }] = (await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(scenes)
+      .where(and(eq(scenes.campaignId, m.campaign.id), isNull(scenes.deletedAt)))) as [{ n: number }];
+    if (n >= MAX_SCENES_PER_CAMPAIGN) throw badRequest(`A campaign can have at most ${MAX_SCENES_PER_CAMPAIGN} maps`);
+    const grid = { ...DEFAULT_GRID, ...input.grid };
+    let width = input.width;
+    let height = input.height;
+    if (input.backgroundAssetId) {
+      const asset = await this.assets.requireCampaignAsset(input.backgroundAssetId, m.campaign.id, m.member.userId);
+      // Default the scene to the image's native size.
+      width ??= asset.width ?? undefined;
+      height ??= asset.height ?? undefined;
+    }
+    width ??= grid.size * 30;
+    height ??= grid.size * 20;
+    this.checkSize(width, height);
+    const [row] = await this.db
+      .insert(scenes)
+      .values({
+        campaignId: m.campaign.id,
+        name: input.name,
+        backgroundAssetId: input.backgroundAssetId ?? null,
+        backgroundColor: input.backgroundColor ?? "#1a1714",
+        width,
+        height,
+        grid,
+        fogEnabled: input.fogEnabled ?? false,
+        dmNotes: input.dmNotes ?? "",
+        sortOrder: input.sortOrder ?? n,
+      })
+      .returning();
+    // The first map of a campaign becomes the active one so players have somewhere to go.
+    if (!m.campaign.activeSceneId) await this.setActive(m, row!.id);
+    return row!;
+  }
+
+  private checkSize(width: number, height: number) {
+    if (width < 100 || height < 100 || width > MAX_SCENE_PX || height > MAX_SCENE_PX) {
+      throw badRequest(`Map size must be between 100 and ${MAX_SCENE_PX} pixels on each side`);
+    }
+  }
+
+  async update(m: Membership, sceneId: string, patch: Partial<SceneInput> & { expectedVersion?: number }): Promise<SceneRow> {
+    if (!m.caps.has("map.manage")) throw forbidden("Only the DM can edit maps");
+    const current = await this.sceneRow(m.campaign.id, sceneId);
+    if (patch.expectedVersion !== undefined && patch.expectedVersion !== current.version) {
+      throw conflict("This map was changed by someone else. Reload to see the latest version.", { version: current.version });
+    }
+    if (patch.backgroundAssetId) await this.assets.requireCampaignAsset(patch.backgroundAssetId, m.campaign.id, m.member.userId);
+    const width = patch.width ?? current.width;
+    const height = patch.height ?? current.height;
+    this.checkSize(width, height);
+    const { expectedVersion: _ignored, grid, ...rest } = patch;
+    const [row] = await this.db
+      .update(scenes)
+      .set({
+        ...rest,
+        ...(grid ? { grid: { ...current.grid, ...grid } } : {}),
+        version: sql`${scenes.version} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(scenes.id, sceneId))
+      .returning();
+    return row!;
+  }
+
+  async remove(m: Membership, sceneId: string): Promise<void> {
+    if (!m.caps.has("map.manage")) throw forbidden("Only the DM can delete maps");
+    await this.sceneRow(m.campaign.id, sceneId);
+    await this.db.transaction(async (tx) => {
+      await tx.update(scenes).set({ deletedAt: new Date() }).where(eq(scenes.id, sceneId));
+      await tx
+        .update(campaigns)
+        .set({ activeSceneId: null })
+        .where(and(eq(campaigns.id, m.campaign.id), eq(campaigns.activeSceneId, sceneId)));
+    });
+  }
+
+  async duplicate(m: Membership, sceneId: string): Promise<SceneRow> {
+    if (!m.caps.has("map.manage")) throw forbidden("Only the DM can copy maps");
+    const src = await this.sceneRow(m.campaign.id, sceneId);
+    return this.db.transaction(async (tx) => {
+      const [copy] = await tx
+        .insert(scenes)
+        .values({
+          campaignId: src.campaignId,
+          name: `${src.name} (copy)`.slice(0, 100),
+          backgroundAssetId: src.backgroundAssetId,
+          backgroundColor: src.backgroundColor,
+          width: src.width,
+          height: src.height,
+          grid: src.grid,
+          fogEnabled: src.fogEnabled,
+          dmNotes: src.dmNotes,
+          sortOrder: src.sortOrder + 1,
+        })
+        .returning();
+      const srcTokens = await tx.select().from(tokens).where(eq(tokens.sceneId, src.id));
+      if (srcTokens.length) {
+        await tx.insert(tokens).values(
+          srcTokens.map(({ id: _id, createdAt: _c, updatedAt: _u, version: _v, ...t }) => ({ ...t, sceneId: copy!.id })),
+        );
+      }
+      const srcFog = await tx.select().from(fogOps).where(eq(fogOps.sceneId, src.id)).orderBy(asc(fogOps.seq));
+      for (const f of srcFog) await tx.insert(fogOps).values({ sceneId: copy!.id, mode: f.mode, shape: f.shape, createdBy: f.createdBy });
+      return copy!;
+    });
+  }
+
+  async setActive(m: Membership, sceneId: string | null): Promise<void> {
+    if (!m.caps.has("map.manage")) throw forbidden("Only the DM can change the map players see");
+    if (sceneId) await this.sceneRow(m.campaign.id, sceneId);
+    await this.db.update(campaigns).set({ activeSceneId: sceneId }).where(eq(campaigns.id, m.campaign.id));
+    m.campaign.activeSceneId = sceneId;
+  }
+
+  // ---- Full state (per viewer) --------------------------------------------
+
+  async fogState(sceneRow: SceneRow): Promise<{ state: FogState; ops: FogOpDto[] }> {
+    const rows = await this.db
+      .select({ id: fogOps.id, mode: fogOps.mode, shape: fogOps.shape })
+      .from(fogOps)
+      .where(eq(fogOps.sceneId, sceneRow.id))
+      .orderBy(asc(fogOps.seq));
+    return { state: { enabled: sceneRow.fogEnabled, ops: rows }, ops: rows };
+  }
+
+  async tokenRows(sceneId: string): Promise<Array<{ token: TokenRow; portraitUrl: string | null }>> {
+    const rows = await this.db
+      .select({ token: tokens, data: characters.data })
+      .from(tokens)
+      .leftJoin(characters, eq(characters.id, tokens.characterId))
+      .where(eq(tokens.sceneId, sceneId))
+      .orderBy(asc(tokens.createdAt));
+    return rows.map((r) => ({ token: r.token, portraitUrl: r.data?.portraitUrl || null }));
+  }
+
+  /** Everything one viewer is allowed to know about a scene. */
+  async stateFor(m: Membership, sceneId: string): Promise<SceneState> {
+    const row = await this.viewable(m, sceneId);
+    const [{ state, ops }, rows] = await Promise.all([this.fogState(row), this.tokenRows(row.id)]);
+    const viewer = viewerOf(m);
+    const visible = rows.map((r) => toTokenDto(r.token, r.portraitUrl)).filter((t) => canSeeToken(t, viewer, state));
+    return { scene: toSceneDto(row, m.campaign.activeSceneId, m.caps.has("dmNotes.view")), tokens: visible, fog: ops };
+  }
+
+  // ---- Tokens ------------------------------------------------------------
+
+  private async tokenRow(sceneId: string, tokenId: string): Promise<TokenRow> {
+    const [row] = await this.db.select().from(tokens).where(and(eq(tokens.id, tokenId), eq(tokens.sceneId, sceneId))).limit(1);
+    if (!row) throw notFound("Token");
+    return row;
+  }
+
+  private async validateRefs(m: Membership, input: Partial<TokenInput>) {
+    if (input.imageAssetId) await this.assets.requireCampaignAsset(input.imageAssetId, m.campaign.id, m.member.userId);
+    if (input.characterId) {
+      const [c] = await this.db
+        .select({ id: characters.id, ownerId: characters.ownerId, campaignId: characters.campaignId })
+        .from(characters)
+        .where(and(eq(characters.id, input.characterId), isNull(characters.deletedAt)));
+      if (!c) throw badRequest("Linked character not found");
+      // Campaign NPCs/monsters, or a PC that a member has selected for this campaign.
+      if (c.campaignId !== m.campaign.id) {
+        const roles = await this.campaigns.memberRoles(m.campaign.id);
+        if (!roles.has(c.ownerId)) throw badRequest("That character isn't part of this campaign");
+        if (!m.caps.has("token.manageAll") && c.ownerId !== m.member.userId) throw forbidden("You can only place your own character");
+      }
+    }
+    if (input.ownerIds?.length) {
+      const found = await this.campaigns.membersByIds(m.campaign.id, input.ownerIds);
+      if (found.length !== new Set(input.ownerIds).size) throw badRequest("Token owners must be campaign members");
+    }
+  }
+
+  async createToken(m: Membership, sceneId: string, input: Partial<TokenInput> & { x: number; y: number }): Promise<TokenDto> {
+    const scene = await this.viewable(m, sceneId);
+    const isGM = m.caps.has("token.manageAll");
+    if (!isGM) {
+      // Players may place a token for their own character only; they own it and can't hide it.
+      if (!m.caps.has("token.controlOwn") || !input.characterId) throw forbidden("Only the DM can add tokens");
+      input = { characterId: input.characterId, x: input.x, y: input.y, size: input.size, ownerIds: [m.member.userId] };
+    }
+    await this.validateRefs(m, input);
+    if (input.characterId) {
+      const [dup] = await this.db
+        .select({ id: tokens.id })
+        .from(tokens)
+        .where(and(eq(tokens.sceneId, sceneId), eq(tokens.characterId, input.characterId)))
+        .limit(1);
+      if (dup && !isGM) throw conflict("Your character is already on this map");
+    }
+    const [{ n }] = (await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(tokens)
+      .where(eq(tokens.sceneId, sceneId))) as [{ n: number }];
+    if (n >= MAX_TOKENS_PER_SCENE) throw badRequest(`A map can hold at most ${MAX_TOKENS_PER_SCENE} tokens`);
+
+    let name = input.name;
+    let color = input.color;
+    let portraitUrl: string | null = null;
+    if (input.characterId) {
+      const [c] = await this.db.select({ name: characters.name, data: characters.data }).from(characters).where(eq(characters.id, input.characterId));
+      name ||= c?.name;
+      color ||= c?.data.color;
+      portraitUrl = c?.data.portraitUrl || null;
+    }
+    const [row] = await this.db
+      .insert(tokens)
+      .values({
+        sceneId,
+        campaignId: scene.campaignId,
+        characterId: input.characterId ?? null,
+        name: name || "Token",
+        imageAssetId: input.imageAssetId ?? null,
+        x: clampCoord(input.x, scene.width),
+        y: clampCoord(input.y, scene.height),
+        size: input.size ?? 1,
+        rotation: input.rotation ?? 0,
+        layer: input.layer ?? "tokens",
+        shape: input.shape ?? "circle",
+        ...(color ? { color } : {}),
+        ...(input.borderColor ? { borderColor: input.borderColor } : {}),
+        hidden: input.hidden ?? false,
+        locked: input.locked ?? false,
+        showName: input.showName ?? true,
+        ownerIds: [...new Set(input.ownerIds ?? [])],
+      })
+      .returning();
+    return toTokenDto(row!, portraitUrl);
+  }
+
+  /**
+   * Applies a token patch. Last write wins on the server; `version` lets clients
+   * drop stale broadcasts. Owners may only move/rotate their unlocked tokens.
+   */
+  async updateToken(m: Membership, sceneId: string, tokenId: string, patch: Partial<TokenInput>): Promise<TokenDto> {
+    const scene = await this.viewable(m, sceneId);
+    const current = await this.tokenRow(sceneId, tokenId);
+    const viewer = viewerOf(m);
+    const currentDto = toTokenDto(current);
+    if (!canControlToken(currentDto, viewer)) throw forbidden("You can't move that token");
+    if (!viewer.isGameMaster) {
+      const allowed = new Set<string>(OWNER_EDITABLE_FIELDS);
+      for (const k of Object.keys(patch)) if (!allowed.has(k)) throw forbidden(`Only the DM can change '${k}'`);
+    }
+    await this.validateRefs(m, patch);
+    const values: Partial<typeof tokens.$inferInsert> = { ...patch };
+    if (patch.x !== undefined) values.x = clampCoord(patch.x, scene.width);
+    if (patch.y !== undefined) values.y = clampCoord(patch.y, scene.height);
+    if (patch.ownerIds) values.ownerIds = [...new Set(patch.ownerIds)];
+    const [row] = await this.db
+      .update(tokens)
+      .set({ ...values, version: sql`${tokens.version} + 1`, updatedAt: new Date() })
+      .where(eq(tokens.id, tokenId))
+      .returning();
+    const portrait = row!.characterId ? await this.portraitFor(row!.characterId) : null;
+    return toTokenDto(row!, portrait);
+  }
+
+  private async portraitFor(characterId: string): Promise<string | null> {
+    const [c] = await this.db.select({ data: characters.data }).from(characters).where(eq(characters.id, characterId));
+    return c?.data.portraitUrl || null;
+  }
+
+  async deleteToken(m: Membership, sceneId: string, tokenId: string): Promise<TokenDto> {
+    await this.viewable(m, sceneId);
+    const current = await this.tokenRow(sceneId, tokenId);
+    if (!m.caps.has("token.manageAll")) throw forbidden("Only the DM can remove tokens");
+    await this.db.delete(tokens).where(eq(tokens.id, tokenId));
+    return toTokenDto(current);
+  }
+
+  // ---- Fog -------------------------------------------------------------------
+
+  private requireFog(m: Membership) {
+    if (!m.caps.has("fog.manage")) throw forbidden("Only the DM can change the fog of war");
+  }
+
+  async addFog(m: Membership, sceneId: string, mode: "reveal" | "hide", shape: FogShape): Promise<FogOpDto> {
+    this.requireFog(m);
+    await this.sceneRow(m.campaign.id, sceneId);
+    const clean = normalizeShape(shape);
+    if (!clean) throw badRequest("That shape is too small or invalid");
+    const [{ n }] = (await this.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(fogOps)
+      .where(eq(fogOps.sceneId, sceneId))) as [{ n: number }];
+    if (n >= MAX_FOG_OPS) throw badRequest("Too many fog shapes on this map. Use 'Hide all' or 'Reveal all' to start fresh.");
+    const [row] = await this.db.insert(fogOps).values({ sceneId, mode, shape: clean, createdBy: m.member.userId }).returning();
+    return { id: row!.id, mode: row!.mode, shape: row!.shape };
+  }
+
+  /** Resets fog: "hide" covers the whole map, "reveal" uncovers it. Both clear the shape history. */
+  async resetFog(m: Membership, sceneId: string, mode: "reveal" | "hide"): Promise<void> {
+    this.requireFog(m);
+    const scene = await this.sceneRow(m.campaign.id, sceneId);
+    await this.db.transaction(async (tx) => {
+      await tx.delete(fogOps).where(eq(fogOps.sceneId, sceneId));
+      if (mode === "reveal") {
+        await tx.insert(fogOps).values({
+          sceneId,
+          mode: "reveal",
+          shape: { kind: "rect", x: 0, y: 0, width: scene.width, height: scene.height },
+          createdBy: m.member.userId,
+        });
+      }
+    });
+  }
+
+  /** Removes the most recent fog shape (DM undo for fog). */
+  async undoFog(m: Membership, sceneId: string): Promise<boolean> {
+    this.requireFog(m);
+    await this.sceneRow(m.campaign.id, sceneId);
+    const [last] = await this.db
+      .select({ id: fogOps.id })
+      .from(fogOps)
+      .where(eq(fogOps.sceneId, sceneId))
+      .orderBy(desc(fogOps.seq))
+      .limit(1);
+    if (!last) return false;
+    await this.db.delete(fogOps).where(eq(fogOps.id, last.id));
+    return true;
+  }
+
+  async setFogEnabled(m: Membership, sceneId: string, enabled: boolean): Promise<SceneRow> {
+    this.requireFog(m);
+    await this.sceneRow(m.campaign.id, sceneId);
+    const [row] = await this.db
+      .update(scenes)
+      .set({ fogEnabled: enabled, version: sql`${scenes.version} + 1`, updatedAt: new Date() })
+      .where(eq(scenes.id, sceneId))
+      .returning();
+    return row!;
+  }
+}
+
+/** Keeps tokens within (a margin around) the scene so they can't be lost off-map. */
+function clampCoord(v: number, max: number): number {
+  if (!Number.isFinite(v)) throw badRequest("Invalid position");
+  return Math.min(Math.max(v, 0), max);
+}

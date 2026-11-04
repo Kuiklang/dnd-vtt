@@ -6,6 +6,8 @@ import type { CampaignService } from "./campaigns/service.js";
 import type { CharacterService } from "./characters/service.js";
 import type { ChatService } from "./chat/service.js";
 import type { Realtime } from "./realtime/socket.js";
+import type { AssetService } from "./assets/service.js";
+import type { SceneService } from "./scenes/service.js";
 
 export interface AppContext {
   config: Config;
@@ -14,6 +16,8 @@ export interface AppContext {
   campaigns: CampaignService;
   characters: CharacterService;
   chat: ChatService;
+  assets: AssetService;
+  scenes: SceneService;
   /** Set once Socket.IO is attached; services use it to broadcast REST-originated changes. */
   realtime?: Realtime;
 }

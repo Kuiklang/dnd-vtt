@@ -199,7 +199,7 @@ describe("realtime lobby", () => {
 
   it("rate limits event floods", async () => {
     const { id, s } = await table();
-    const results = await Promise.all(Array.from({ length: 50 }, () => emit(s.alice, "dice:roll", { campaignId: id, formula: "1d4" })));
+    const results = await Promise.all(Array.from({ length: 90 }, () => emit(s.alice, "dice:roll", { campaignId: id, formula: "1d4" })));
     expect(results.some((r) => r.error === "You're doing that too fast")).toBe(true);
   });
 });

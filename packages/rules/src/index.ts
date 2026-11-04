@@ -9,3 +9,6 @@ export * from "./character/schema.js";
 export * from "./character/derive.js";
 export * from "./permissions.js";
 export * from "./visibility.js";
+export * from "./map/geometry.js";
+export * from "./map/fog.js";
+export * from "./map/tokens.js";

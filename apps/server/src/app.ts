@@ -17,8 +17,18 @@ import { campaignRoutes } from "./campaigns/routes.js";
 import { characterRoutes } from "./characters/routes.js";
 import { chatRoutes } from "./chat/routes.js";
 import { Realtime } from "./realtime/socket.js";
+import multipart from "@fastify/multipart";
+import { AssetService, MAX_UPLOAD_BYTES } from "./assets/service.js";
+import { LocalDiskStorage, type Storage } from "./assets/storage.js";
+import { assetRoutes } from "./assets/routes.js";
+import { SceneService } from "./scenes/service.js";
+import { sceneRoutes } from "./scenes/routes.js";
 
-export async function buildApp(config: Config, db: Db, opts: { realtime?: boolean } = {}): Promise<FastifyInstance> {
+export async function buildApp(
+  config: Config,
+  db: Db,
+  opts: { realtime?: boolean; storage?: Storage } = {},
+): Promise<FastifyInstance> {
   const app = Fastify({
     logger: config.NODE_ENV === "test" ? false : { level: config.NODE_ENV === "production" ? "info" : "debug" },
     trustProxy: config.NODE_ENV === "production",
@@ -27,6 +37,7 @@ export async function buildApp(config: Config, db: Db, opts: { realtime?: boolea
 
   const auth = new AuthService(db, { sessionTtlDays: config.SESSION_TTL_DAYS, guestTtlDays: config.GUEST_TTL_DAYS });
   const campaigns = new CampaignService(db);
+  const assets = new AssetService(db, opts.storage ?? new LocalDiskStorage(path.resolve(config.UPLOAD_DIR)), campaigns);
   const ctx: AppContext = {
     config,
     db,
@@ -34,11 +45,14 @@ export async function buildApp(config: Config, db: Db, opts: { realtime?: boolea
     campaigns,
     characters: new CharacterService(db, campaigns),
     chat: new ChatService(db, campaigns, () => ctx.realtime),
+    assets,
+    scenes: new SceneService(db, campaigns, assets),
   };
   app.decorate("ctx", ctx);
   app.decorateRequest("auth", null);
 
   await app.register(cookie);
+  await app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 } });
   if (config.RATE_LIMIT === "on") {
     await app.register(rateLimit, { global: true, max: 300, timeWindow: "1 minute" });
   }
@@ -89,6 +103,8 @@ export async function buildApp(config: Config, db: Db, opts: { realtime?: boolea
   await app.register(campaignRoutes);
   await app.register(characterRoutes);
   await app.register(chatRoutes);
+  await app.register(assetRoutes);
+  await app.register(sceneRoutes);
 
   if (config.WEB_DIST && existsSync(config.WEB_DIST)) {
     await app.register(fastifyStatic, { root: path.resolve(config.WEB_DIST) });
