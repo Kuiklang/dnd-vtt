@@ -1,0 +1,16 @@
+{
+  "name": "dnd-vtt",
+  "private": true,
+  "version": "0.1.0",
+  "description": "D&D Virtual Tabletop — everything you need to play D&D, in one place.",
+  "packageManager": "pnpm@10.28.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter @vtt/server --filter @vtt/web dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "db:migrate": "pnpm --filter @vtt/server db:migrate",
+    "db:generate": "pnpm --filter @vtt/server db:generate"
+  }
+}
