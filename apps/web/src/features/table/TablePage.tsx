@@ -16,6 +16,7 @@ import { TokenPanel } from "./TokenPanel";
 import { useTable, type SaveStatus, type Table } from "./useTable";
 import { useCombat } from "./useCombat";
 import { CombatPanel } from "./CombatPanel";
+import { DiceOverlay } from "../dice/DiceOverlay";
 import type { FogShapeKind, Tool } from "./types";
 
 export function TablePage() {
@@ -136,6 +137,7 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] flex-col">
+      <DiceOverlay roll={lobby.lastRoll} />
       {/* Top toolbar */}
       <div className="flex flex-wrap items-center gap-2 border-b border-ink-700 bg-ink-900/90 px-3 py-1.5 text-sm">
         <Link to={`/campaigns/${detail.campaign.id}`} className="rounded px-2 py-1 text-parchment-400 hover:bg-ink-800">
