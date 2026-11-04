@@ -65,6 +65,7 @@
 - [ ] Creator: เลือก cantrip/spell และอุปกรณ์เริ่มต้น (ตอนนี้เพิ่มเองในชีต)
 - [ ] ข้อความ error ของ creator เป็นภาษาไทย (ตอนนี้มาจาก rules engine เป็นอังกฤษ)
 - [ ] ทดสอบ import กับ Claude API จริง (environment นี้ไม่มี ANTHROPIC_API_KEY; ทดสอบผ่าน fake extractor + stub UI แล้ว)
+- [x] อ่าน sheet ด้วย Claude Code ในเครื่องแทน API key (`SHEET_READER=claude-code`) ทดสอบกับ Claude Code จริงแล้ว ทั้ง PNG และ PDF
 
 ## Phase 4 — Combat ✅
 
@@ -138,7 +139,7 @@
 - [ ] Undo ที่อยู่รอดหลังรีโหลด (เก็บประวัติที่ server)
 - [x] Session recap: ร่างจาก log สาธารณะ, แก้, เผยแพร่ให้ผู้เล่น
 - [x] Campaign timeline: เซสชัน + เหตุการณ์ในเรื่อง (วันที่ในโลกเกม, ผูกเซสชัน, เฉพาะ DM)
-- [ ] ร่าง recap ด้วย AI (Claude API ฝั่ง server) — ต้องตัดสินใจเรื่องค่าใช้จ่าย
+- [x] ~~ร่าง recap ด้วย AI~~ ไม่ทำ (ผู้ใช้อยากให้ใช้ฟรี; ปุ่ม "ร่างจาก log" แบบฟรียังอยู่)
 - [x] แก้: ร่ายเวทแบบซ่อนแจ้งเฉพาะ DM
 - [ ] Scene templates (export/import JSON)
 - [ ] Drawing tools + custom layers

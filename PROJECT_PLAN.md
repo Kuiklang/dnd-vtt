@@ -380,6 +380,24 @@
 - Concentration ติดตามเฉพาะตัวละครที่มีชีต (มอนสเตอร์จาก bestiary ยังไม่ติดตาม); ไม่ตัดสินผล save ให้อัตโนมัติ (ผู้เล่น/DM กด End เอง)
 - ร่าง recap เป็นการรวบรวมจาก log (ไม่ได้ใช้ AI เรียบเรียง)
 
+### 2026-11-04 — อ่าน sheet ด้วย Claude Code ในเครื่อง (ไม่ต้องใช้ API key) ✅
+
+ผู้ใช้ต้องการให้ใช้ฟรี (เล่นกับเพื่อน มีแค่ตัวเองเป็น DM) จึงเพิ่มตัวเลือกให้การอ่าน character sheet จาก PDF/รูป
+เรียกใช้ Claude Code ที่ติดตั้งและล็อกอินไว้ในคอมเครื่องที่รัน server แทน Claude API (ใช้โควตาแพ็กเกจ Claude ของผู้ใช้)
+
+- ตั้งใน `apps/server/.env`: `SHEET_READER=claude-code` (ตัวเลือก: `auto` ค่าเริ่มต้น = ใช้ API ถ้ามี key ไม่งั้นปิด, `api`, `off`)
+  และถ้า `claude` ไม่อยู่ใน PATH ให้ใส่ `CLAUDE_CODE_PATH`; เลือกโมเดลได้ด้วย `CLAUDE_CODE_MODEL` (เว้นว่าง = ค่าเริ่มต้นของแพ็กเกจ)
+- โค้ด: `apps/server/src/import/claudeCode.ts` (เรียก `claude -p` แบบ array ไม่ผ่าน shell, ใช้ได้แค่ tool `Read`, ไฟล์อยู่ในโฟลเดอร์ชั่วคราวที่ลบทิ้งหลังอ่าน,
+  ตรวจคำตอบด้วย schema เดียวกับ API) และ `import/provider.ts` (เลือกตัวอ่านจาก `.env`)
+- ข้อจำกัด: ใช้ได้เฉพาะตอน server รันบนคอมเครื่องที่ล็อกอิน Claude Code ไว้ ถ้าย้ายไปโฮสต์อื่นต้องใช้ API key แทน; ร่าง recap ด้วย AI ไม่ทำ (ผู้ใช้เลือกแบบฟรี)
+
+| ชุดทดสอบ | ผล |
+| --- | --- |
+| `apps/server` integration (เพิ่ม `test/claudeCodeReader.test.ts` 4 ตัว: เรียกแบบปลอดภัย + ได้ draft, ไม่ได้ติดตั้ง/ไม่ได้ล็อกอิน/คำตอบเสีย/ไม่ตรง schema, เลือกตัวอ่านจาก `.env`, ผ่าน endpoint import) | 70/70 ✅ |
+| ทดลองกับ Claude Code จริงในเครื่องทดสอบ: sheet แบบ PNG (~7 วินาที) และ PDF (~9 วินาที) อ่านชื่อ/คลาส/ค่า ability/AC/HP/การโจมตีถูกต้อง | ✅ |
+
+Error ที่พบและแก้: Claude Code ไม่รับ JSON Schema ที่มี `"$schema": draft 2020-12` (จาก `z.toJSONSchema`) → ตัด key นี้ออกก่อนส่ง
+
 ---
 
 ## 5. วิธีรันและทดสอบ
