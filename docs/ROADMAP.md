@@ -23,7 +23,7 @@ MVP = สิ่งที่กลุ่มหนึ่งใช้เล่น�
 | 4 Combat (ดึงมาก่อน Phase 3 เพื่อปิด MVP) | combat mode, initiative tracker, turn/round, HP/damage (resistance/vulnerability/immunity), healing, conditions + duration, combat HUD, action economy | ✅ |
 | 5 DM Toolkit | NPC/Monster library (SRD), encounter builder, journal (Markdown), handouts, DM Screen (panels), random tables, custom rulesets UI | ✅ เสร็จ (ยกเว้น custom rulesets UI และระดับความยาก encounter) |
 | 6 Music | audio upload, playlists, ambient layers, realtime sync (DM controls, player local volume) | ✅ เสร็จ (ยังไม่มี crossfade และเพลงประจำ scene) |
-| 7 Advanced ⏭ ถัดไป | spell library + casting + AoE templates, inventory transfer, measurement, scene templates & switching, undo/redo, session recap, timeline | |
+| 7 Advanced 🟡 | ✅ spell library + casting + AoE templates, inventory transfer, scene music · เหลือ: scene templates, undo/redo, session recap, timeline, drawing tools | รอบแรกเสร็จ 2026-11-04 |
 | 8 Advanced features | dynamic lighting & vision, voice chat (WebRTC, optional), AI DM assistant | |
 | 9 Polish | UI polish, performance, security review, docs, accessibility | |
 

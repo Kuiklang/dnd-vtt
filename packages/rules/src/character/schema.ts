@@ -68,6 +68,8 @@ export const spellSchema = z.object({
   concentration: z.boolean().default(false),
   ritual: z.boolean().default(false),
   notes: longText(2000).default(""),
+  /** SRD library id this entry came from (Phase 7); lets the table resolve a cast. */
+  srdId: shortText(60).default(""),
 });
 
 export const itemSchema = z.object({

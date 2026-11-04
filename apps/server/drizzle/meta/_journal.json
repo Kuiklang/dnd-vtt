@@ -36,6 +36,13 @@
       "when": 1793804539307,
       "tag": "0004_phase6_audio",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793805915798,
+      "tag": "0005_phase7_spells_templates",
+      "breakpoints": true
     }
   ]
 }

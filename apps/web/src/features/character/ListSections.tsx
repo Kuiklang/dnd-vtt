@@ -4,11 +4,12 @@ import { Button, Textarea, cx } from "../../components/ui";
 import { mod, newId } from "./format";
 import { NumberField, RollButton, Section, SourceTag, TextField } from "./fields";
 import type { SetData } from "./CharacterSheet";
+import { CastButton, GiveButton, LastCast, SrdSpellPicker, srdArea, type SheetActions } from "./SpellActions";
 
 type Derived = ReturnType<typeof deriveCharacter>;
 type Roll = ((formula: string, label: string, rollType: string, d20?: boolean) => void) | undefined;
 
-export function SpellsSection({ data, derived, editable, setData, roll, d20 }: { data: CharacterData; derived: Derived; editable: boolean; setData: SetData; roll: Roll; d20: (n: number) => string }) {
+export function SpellsSection({ data, derived, editable, setData, roll, d20, actions }: { data: CharacterData; derived: Derived; editable: boolean; setData: SetData; roll: Roll; d20: (n: number) => string; actions?: SheetActions }) {
   const sc = data.spellcasting;
   const [newSpell, setNewSpell] = useState({ name: "", level: 0 });
   const byLevel = Array.from({ length: 10 }, (_, lvl) => sc.spells.map((s, i) => ({ s, i })).filter(({ s }) => s.level === lvl));
@@ -78,7 +79,8 @@ export function SpellsSection({ data, derived, editable, setData, roll, d20 }: {
           </Button>
         )}
       </Section>
-      <Section title="Spells">
+      <Section title="Spells" actions={editable && <SrdSpellPicker data={data} onAdd={(entry) => setData((x) => (x.spellcasting.spells.push(entry), x))} />}>
+        {actions && <LastCast characterId={actions.characterId} onMap={actions.table.onMap} />}
         {sc.spells.length === 0 && <p className="text-sm text-parchment-500">No spells yet.</p>}
         {byLevel.map((list, lvl) =>
           list.length === 0 ? null : (
@@ -98,7 +100,11 @@ export function SpellsSection({ data, derived, editable, setData, roll, d20 }: {
                         onChange={(e) => setData((x) => ((x.spellcasting.spells[i]!.prepared = e.target.checked), x))}
                       />
                     )}
-                    <span className="flex-1">{s.name}</span>
+                    <span className="flex-1">
+                      {s.name}
+                      {s.srdId && <span className="ml-1 text-[10px] text-parchment-500" title="Linked to the SRD spell library">SRD{srdArea(s.srdId) ? " · area" : ""}</span>}
+                    </span>
+                    {actions && <CastButton spell={s} data={data} actions={actions} />}
                     {editable ? (
                       <>
                         <label className="flex items-center gap-1 text-[10px] text-parchment-500" title="Concentration">
@@ -129,7 +135,7 @@ export function SpellsSection({ data, derived, editable, setData, roll, d20 }: {
             onSubmit={(e) => {
               e.preventDefault();
               if (!newSpell.name.trim()) return;
-              setData((x) => (x.spellcasting.spells.push({ id: newId(), name: newSpell.name.trim(), level: newSpell.level, school: "", prepared: false, concentration: false, ritual: false, notes: "" }), x));
+              setData((x) => (x.spellcasting.spells.push({ id: newId(), name: newSpell.name.trim(), level: newSpell.level, school: "", prepared: false, concentration: false, ritual: false, notes: "", srdId: "" }), x));
               setNewSpell({ name: "", level: newSpell.level });
             }}
           >
@@ -146,7 +152,11 @@ export function SpellsSection({ data, derived, editable, setData, roll, d20 }: {
             </Button>
           </form>
         )}
-        <p className="mt-3 text-[11px] text-parchment-500">The SRD spell library, casting workflow and AoE templates arrive in Phase 7. For now spells are tracked manually.</p>
+        <p className="mt-3 text-[11px] text-parchment-500">
+          {actions
+            ? "Cast spends the slot and rolls on the server; spells with an area can be placed on the map as a template."
+            : "Open this sheet from a campaign table to cast spells (spend slots and roll automatically)."}
+        </p>
       </Section>
     </div>
   );
@@ -154,7 +164,7 @@ export function SpellsSection({ data, derived, editable, setData, roll, d20 }: {
 
 const ITEM_CATEGORIES = ["weapon", "armor", "shield", "potion", "consumable", "magic", "quest", "gear", "other"] as const;
 
-export function InventorySection({ data, editable, setData }: { data: CharacterData; editable: boolean; setData: SetData }) {
+export function InventorySection({ data, editable, setData, actions }: { data: CharacterData; editable: boolean; setData: SetData; actions?: SheetActions }) {
   const totalWeight = data.inventory.reduce((s, i) => s + i.weight * i.quantity, 0);
   return (
     <div className="grid gap-3 lg:grid-cols-[1fr_260px]">
@@ -179,6 +189,7 @@ export function InventorySection({ data, editable, setData }: { data: CharacterD
                 <th className="w-28">Type</th>
                 <th className="w-16">Qty</th>
                 <th className="w-16">Wt</th>
+                {actions && <th className="w-10" />}
                 {editable && <th className="w-6" />}
               </tr>
             </thead>
@@ -206,6 +217,11 @@ export function InventorySection({ data, editable, setData }: { data: CharacterD
                   <td>
                     <NumberField label="Weight" value={it.weight} min={0} max={100000} disabled={!editable} onChange={(n) => setData((x) => ((x.inventory[i]!.weight = n), x))} />
                   </td>
+                  {actions && (
+                    <td>
+                      <GiveButton item={it} actions={actions} />
+                    </td>
+                  )}
                   {editable && (
                     <td>
                       <button aria-label={`Remove ${it.name}`} className="text-blood-400" onClick={() => setData((x) => (x.inventory.splice(i, 1), x))}>

@@ -31,7 +31,8 @@
 | Combat: initiative, turns/rounds, HP/damage/resistances, conditions, action economy | ✅ Phase 4 |
 | DM Toolkit: bestiary SRD, encounter builder, journal + handouts, random tables, DM screen | ✅ Phase 5 |
 | Music: อัปโหลดเสียง, playlist, เสียงบรรยากาศซ้อนชั้น, เอฟเฟกต์, sync ทุกเครื่อง, ระดับเสียงของผู้เล่นเอง | ✅ Phase 6 |
-| Music / Advanced / Dynamic lighting | ⏳ Phase 6–8 (ดู [docs/ROADMAP.md](docs/ROADMAP.md)) |
+| เวท SRD + ร่ายเวทจากชีต (ใช้ slot, ทอยอัตโนมัติ), AoE template บนแผนที่, เพลงประจำฉาก, ส่งไอเทม | ✅ Phase 7 (รอบแรก) |
+| Undo/redo, session recap, timeline / Dynamic lighting | ⏳ Phase 7–8 (ดู [docs/ROADMAP.md](docs/ROADMAP.md)) |
 
 ## Tech stack
 
@@ -80,6 +81,7 @@ BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase3.e2e.cjs   # impo
 BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase4.e2e.cjs   # combat + dice animation
 BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase5.e2e.cjs   # DM toolkit
 BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase6.e2e.cjs   # music & ambience
+BASE_URL=http://localhost:3001 SHOTS=/tmp/shots node e2e/phase7.e2e.cjs   # spells, AoE templates, scene music, give item
 ```
 
 `TEST_DATABASE_URL` ใช้กำหนด DB สำหรับ integration test (ค่าเริ่มต้น `postgres://postgres@localhost:5432/vtt_test` — **ถูกล้างทุกครั้งที่รัน**)

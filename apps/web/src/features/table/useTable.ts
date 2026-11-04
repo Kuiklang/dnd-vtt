@@ -3,7 +3,7 @@ import type { FogShape } from "@vtt/rules";
 import { api, errorMessage } from "../../lib/api";
 import { emitAck, getSocket } from "../../lib/socket";
 import { toast } from "../../stores/toast";
-import type { FogOpDto, SceneDto, SceneState, TokenDto, TokenStats } from "./types";
+import type { FogOpDto, SceneDto, SceneState, TemplateDto, TokenDto, TokenStats } from "./types";
 
 /** Token fields a client may send (stats are write-only; reads come back as vitals). */
 export type TokenInput = Partial<TokenDto> & { stats?: TokenStats | null };
@@ -21,6 +21,7 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
   const [scene, setScene] = useState<SceneDto | null>(null);
   const [tokens, setTokens] = useState<Map<string, TokenDto>>(new Map());
   const [fog, setFog] = useState<FogOpDto[]>([]);
+  const [templates, setTemplates] = useState<TemplateDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [save, setSave] = useState<SaveStatus>("idle");
   const pending = useRef(0);
@@ -48,6 +49,7 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
     setScene(s.scene);
     setTokens(new Map(s.tokens.map((t) => [t.id, t])));
     setFog(s.fog);
+    setTemplates(s.templates ?? []);
   }, []);
 
   const loadScenes = useCallback(async () => {
@@ -117,6 +119,13 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
       });
     };
     const onState = (st: SceneState) => st.scene.id === sceneIdRef.current && applyState(st);
+    const onTemplate = (t: TemplateDto) => {
+      if (t.sceneId !== sceneIdRef.current) return;
+      setTemplates((list) => [...list.filter((x) => x.id !== t.id), t]);
+    };
+    const onTemplateRemove = (p: { sceneId: string; templateId: string }) => {
+      if (p.sceneId === sceneIdRef.current) setTemplates((list) => list.filter((x) => x.id !== p.templateId));
+    };
     const onScenesChanged = (p: { campaignId: string }) => p.campaignId === campaignId && void loadScenes();
     const onActivated = (p: { campaignId: string; sceneId: string | null }) => {
       if (p.campaignId !== campaignId) return;
@@ -132,6 +141,8 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
     s.on("token:upsert", onUpsert);
     s.on("token:remove", onRemove);
     s.on("scene:state", onState);
+    s.on("template:upsert", onTemplate);
+    s.on("template:remove", onTemplateRemove);
     s.on("scenes:changed", onScenesChanged);
     s.on("scene:activated", onActivated);
     s.on("scene:deleted", onDeleted);
@@ -139,6 +150,8 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
       s.off("token:upsert", onUpsert);
       s.off("token:remove", onRemove);
       s.off("scene:state", onState);
+      s.off("template:upsert", onTemplate);
+      s.off("template:remove", onTemplateRemove);
       s.off("scenes:changed", onScenesChanged);
       s.off("scene:activated", onActivated);
       s.off("scene:deleted", onDeleted);
@@ -197,6 +210,30 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
   );
 
   // ---- Fog ----------------------------------------------------------------------
+
+  const createTemplate = useCallback(
+    async (t: TemplateInput) => {
+      const dto = await track(emitAck<TemplateDto>("template:create", { ...ref(), template: t }));
+      setTemplates((list) => [...list.filter((x) => x.id !== dto.id), dto]);
+      return dto;
+    },
+    [ref, track],
+  );
+  const updateTemplate = useCallback(
+    async (templateId: string, patch: Partial<TemplateInput>) => {
+      const dto = await track(emitAck<TemplateDto>("template:update", { ...ref(), templateId, patch }));
+      setTemplates((list) => list.map((x) => (x.id === dto.id ? dto : x)));
+    },
+    [ref, track],
+  );
+  const deleteTemplate = useCallback(
+    async (templateId: string) => {
+      await track(emitAck("template:delete", { ...ref(), templateId }));
+      setTemplates((list) => list.filter((x) => x.id !== templateId));
+    },
+    [ref, track],
+  );
+  const clearTemplates = useCallback(() => track(emitAck("template:clear", ref())), [ref, track]);
 
   const addFog = useCallback((mode: "reveal" | "hide", shape: FogShape) => track(emitAck("fog:add", { ...ref(), mode, shape })), [ref, track]);
   const resetFog = useCallback((mode: "reveal" | "hide") => track(emitAck("fog:reset", { ...ref(), mode })), [ref, track]);
@@ -269,6 +306,11 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
     scene,
     tokens,
     fog,
+    templates,
+    createTemplate,
+    updateTemplate,
+    deleteTemplate,
+    clearTemplates,
     error,
     save,
     loadScenes,
@@ -288,6 +330,8 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
 }
 
 export type Table = ReturnType<typeof useTable>;
+
+export type TemplateInput = Omit<TemplateDto, "id" | "sceneId" | "ownerId">;
 
 const TOKEN_INPUT_KEYS = [
   "characterId",

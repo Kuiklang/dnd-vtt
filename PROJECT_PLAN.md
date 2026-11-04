@@ -4,7 +4,7 @@
 > เอกสารนี้คือบันทึกความคืบหน้าหลักของโปรเจกต์ อัปเดตทุกครั้งที่จบงานแต่ละช่วง
 > รายการงานย่อยและสถานะจริงอยู่ใน [TODO.md](TODO.md) · รายละเอียดเชิงเทคนิคอยู่ใน [docs/](docs/)
 
-ปรับปรุงล่าสุด: **2026-11-04** · สถานะ: **Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ · Phase 4 ✅ · Phase 5 ✅ · Phase 6 ✅ → MVP ครบ · ถัดไป Phase 7 (Advanced)**
+ปรับปรุงล่าสุด: **2026-11-04** · สถานะ: **Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ · Phase 4 ✅ · Phase 5 ✅ · Phase 6 ✅ → MVP ครบ · Phase 7 🟡 (รอบแรกเสร็จ: เวท SRD + ร่ายเวท, AoE template, เพลงประจำฉาก, ส่งไอเทม) · ถัดไป Phase 7 รอบสอง**
 
 ---
 
@@ -62,8 +62,8 @@
 | 4 Combat *(ทำก่อน 3 เพื่อปิด MVP)* | combat mode, initiative, turn/round, HP/damage/healing บน token, conditions, combat HUD | ✅ เสร็จ |
 | 3 Character & Dice | character creator wizard, dice animation, character import (PDF/รูป), ability checks จาก token *(token↔character HP sync ทำแล้วใน Phase 4)* | ✅ เสร็จ |
 | 5 DM Toolkit | NPC/Monster library, encounter builder, journal, handouts, DM screen, random tables | ✅ เสร็จ |
-| 6 Music | audio upload, playlist, ambient, realtime sync | ⏭ ถัดไป |
-| 7 Advanced | spells/AoE, inventory, scene templates, undo/redo, session recap, timeline, drawing tools, custom layers | |
+| 6 Music | audio upload, playlist, ambient, realtime sync | ✅ เสร็จ |
+| 7 Advanced | spells/AoE ✅, ส่งไอเทม ✅, เพลงประจำฉาก ✅ · เหลือ: scene templates, undo/redo, session recap, timeline, drawing tools, custom layers | 🟡 รอบแรกเสร็จ |
 | 8 Advanced features | dynamic lighting & vision, voice chat, AI DM assistant | |
 | 9 Polish | UI polish, performance, security review, docs | |
 
@@ -291,6 +291,52 @@
 - เพลงที่วัดความยาวไม่ได้จะไม่เลื่อนไปเพลงถัดไปเอง (DM กด ถัดไป) — เบราว์เซอร์ส่วนใหญ่วัดได้
 - ความต่างของเวลาระหว่างเครื่องยอมให้ ~1.5 วินาที (ไม่ได้ sync ระดับ millisecond)
 - ยังไม่มี crossfade และเพลงประจำ scene (ต่อใน Phase 7 พร้อม scene switching)
+
+### 2026-11-04 — Phase 7 (รอบแรก): Spells, AoE templates, Scene music, Item transfer ✅
+
+รอบนี้เลือกทำ 4 อย่างที่ใช้บ่อยที่สุดตอนเล่นจริงก่อน ส่วน undo/redo, session recap, timeline, drawing tools อยู่รอบถัดไป
+
+**สิ่งที่ใช้งานได้จริง**
+
+- **คลังเวท SRD**: เวท 51 บทจาก SRD 5.1 (cantrip ถึงเลเวล 9 ที่ใช้บ่อย) ค้นหาด้วยชื่อ/ระดับ แล้วกด "Add" ใส่ชีต
+  (ระดับ, school, concentration, ritual กรอกให้เอง); เวทที่พิมพ์เองยังใช้ได้เหมือนเดิม
+- **ร่ายเวทจากชีต** (ปุ่ม Cast เมื่อเปิดชีตจากโต๊ะ/ล็อบบี้): เลือกระดับ slot (upcast ได้), ritual, ทอยซ่อนสำหรับ DM;
+  **server** ล็อกแถวชีต ใช้ slot (ไม่มี slot เหลือ → ปฏิเสธ), คำนวณ DC/โบนัสโจมตี, ทอย attack/damage/healing ตามกฎ
+  (cantrip scaling, upcast, Magic Missile/Scorching Ray หลายลูก) แล้วโพสต์ลง log เช่น
+  "Elara casts Fireball at 3rd level — DC 15 Dex save (half on success) — 20-ft sphere"
+- **AoE template บนแผนที่** (ปุ่ม 📐 หรือกด T): วงกลม/กรวย/เส้น/สี่เหลี่ยม ขนาดเป็นฟุตตาม grid ของฉาก, กดค้างแล้วลากเพื่อเล็งทิศ,
+  โทเคนที่อยู่ในพื้นที่มีวงไฮไลต์ (คำนวณจากกฎเดียวกันทั้ง client/server), sync realtime ทุกเครื่อง,
+  หลังร่ายเวทที่มีพื้นที่กด "Place 20-ft sphere on the map" ได้เลย; หมุน 45°/ลบ ได้เฉพาะเจ้าของหรือ DM;
+  DM วาง template แบบซ่อน (เช่น กับดัก) ได้ — ผู้เล่นไม่ได้รับข้อมูลเลยจนกว่าจะเปิด; DM ล้างทั้งฉากได้
+- **เพลงประจำฉาก**: DM เลือก playlist หรือเพลงให้ฉาก (ในการตั้งค่าฉาก); เมื่อกด "แสดงให้ผู้เล่น" เพลงเริ่มให้ทุกคนอัตโนมัติ
+  (ถ้าเพลงเดียวกันเล่นอยู่แล้วจะไม่เริ่มใหม่); ผู้เล่นไม่เห็นการตั้งค่านี้
+- **ส่งไอเทมให้ตัวละครอื่น** (ปุ่ม Give ในแท็บ Inventory): เลือกผู้รับ (ตัวละครของผู้เล่นในแคมเปญ, DM ส่งให้ NPC ได้) และจำนวน;
+  server ล็อกทั้งสองชีตตามลำดับ (กัน deadlock), รวม stack ถ้าชื่อ+ประเภทตรงกัน, ไอเทมที่สวมอยู่จะถอดออก, โพสต์ลง log
+- แก้ระหว่างทาง: Esc ในหน้าต่างซ้อน (เช่น คลังเวทในชีต) ปิดเฉพาะหน้าต่างบนสุด; ปุ่มลัดของโต๊ะไม่ทำงานขณะเปิดหน้าต่าง;
+  ชีตจำแท็บที่เปิดไว้เมื่อข้อมูลอัปเดตจาก server
+
+**การทดสอบ (รันจริงทั้งหมด)**
+
+| ชุด | ผล |
+| --- | --- |
+| `packages/rules` unit (เพิ่ม 8: ค้นหาเวท, cantrip scaling, upcast, หลายลูก, template geometry วงกลม/กรวย/เส้น/สี่เหลี่ยม) | 155/155 ✅ |
+| `apps/server` integration (เพิ่ม 4: ร่ายเวท + slot + สิทธิ์ + log, ส่งไอเทม + merge stack + สิทธิ์, template realtime + ซ่อน/เปิด, เพลงประจำฉาก) | 61/61 ✅ |
+| `apps/web` unit | 12/12 ✅ |
+| E2E Phase 7: ผู้เล่นเพิ่ม Fireball จากคลัง SRD → ร่ายที่ slot 3 (slot ลดใน DB, log ขึ้นทั้งสองเครื่อง) → วางพื้นที่ 20 ft บน goblin (DM และผู้เล่นเห็น, goblin ทั้งสองไฮไลต์) → DM เล็ง cone แล้วลบ → ผู้เล่นส่ง potion ให้ Torvin → DM ตั้งเพลงให้ฉาก Inn แล้วแสดงฉาก → `<audio>` ผู้เล่นเล่นเพลงนั้นจริง, ไม่มี console error | ✅ |
+| E2E Phase 1–6 (regression) | ✅ |
+| `pnpm typecheck` ทั้ง 3 package | ✅ |
+
+**Error ที่พบและแก้แล้ว**
+
+1. กด Esc ในคลังเวทแล้วชีตปิดไปด้วย และโต๊ะยกเลิกการเลือก token → Modal ปิดเฉพาะบนสุด + ปุ่มลัดโต๊ะหยุดทำงานขณะมีหน้าต่าง
+2. แก้ template บางช่องแล้ว schema ใส่ค่า default ทับช่องที่ไม่ได้ส่ง → แยก schema สำหรับ patch (ไม่มี default)
+3. ป้ายชื่อ template ถูก token บัง → ย้ายป้ายไปเหนือขอบบนของพื้นที่
+
+**ข้อจำกัดที่ยังมี**
+
+- คลังเวทมี 51 บท (ที่ใช้บ่อย) ไม่ใช่ SRD ครบทุกบท; เวทที่ไม่มีในคลังพิมพ์เองได้ แต่ร่ายแล้วจะไม่ทอยอัตโนมัติ
+- ยังไม่ทำ concentration tracking อัตโนมัติ (แสดงป้าย "concentration" ใน log), ยังไม่หัก HP จากเวทอัตโนมัติ (DM ใช้ปุ่ม damage บน token)
+- Template ลากย้ายไม่ได้ (ลบแล้ววางใหม่ / หมุน 45°)
 
 ---
 

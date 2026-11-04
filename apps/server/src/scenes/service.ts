@@ -23,7 +23,7 @@ import {
   type TokenViewer,
 } from "@vtt/rules";
 import type { Db } from "../db/client.js";
-import { campaigns, characters, fogOps, scenes, tokens, type SceneRow, type StatBlockRef, type TokenRow, type TokenStats } from "../db/schema.js";
+import { audioTracks, campaigns, characters, fogOps, mapTemplates, playlists, scenes, tokens, type MapTemplateRow, type SceneMusic, type SceneRow, type StatBlockRef, type TokenRow, type TokenStats } from "../db/schema.js";
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors.js";
 import type { CampaignService, Membership } from "../campaigns/service.js";
 import { assetUrl, type AssetService } from "../assets/service.js";
@@ -46,6 +46,8 @@ export interface SceneDto {
   fogEnabled: boolean;
   /** Only present for viewers with dmNotes.view. */
   dmNotes?: string;
+  /** Scene music; only for viewers with dmNotes.view (it's DM prep). */
+  music?: SceneMusic | null;
   sortOrder: number;
   version: number;
   isActive: boolean;
@@ -110,7 +112,52 @@ export interface SceneState {
   scene: SceneDto;
   tokens: TokenDto[];
   fog: FogOpDto[];
+  templates: TemplateDto[];
 }
+
+export interface TemplateDto {
+  id: string;
+  sceneId: string;
+  ownerId: string | null;
+  shape: MapTemplateRow["shape"];
+  x: number;
+  y: number;
+  size: number;
+  width: number;
+  angle: number;
+  color: string;
+  label: string;
+  hidden: boolean;
+}
+
+export interface TemplateInput {
+  shape: MapTemplateRow["shape"];
+  x: number;
+  y: number;
+  size: number;
+  width: number;
+  angle: number;
+  color: string;
+  label: string;
+  hidden: boolean;
+}
+
+export const MAX_TEMPLATES_PER_SCENE = 60;
+
+export const toTemplateDto = (t: MapTemplateRow): TemplateDto => ({
+  id: t.id,
+  sceneId: t.sceneId,
+  ownerId: t.ownerId,
+  shape: t.shape,
+  x: t.x,
+  y: t.y,
+  size: t.size,
+  width: t.width,
+  angle: t.angle,
+  color: t.color,
+  label: t.label,
+  hidden: t.hidden,
+});
 
 export interface SceneInput {
   name: string;
@@ -121,6 +168,7 @@ export interface SceneInput {
   grid: Partial<GridSettings>;
   fogEnabled: boolean;
   dmNotes: string;
+  music: SceneMusic | null;
   sortOrder: number;
 }
 
@@ -158,7 +206,7 @@ export function toSceneDto(s: SceneRow, activeSceneId: string | null, showNotes:
     height: s.height,
     grid: s.grid,
     fogEnabled: s.fogEnabled,
-    ...(showNotes ? { dmNotes: s.dmNotes } : {}),
+    ...(showNotes ? { dmNotes: s.dmNotes, music: s.music ?? null } : {}),
     sortOrder: s.sortOrder,
     version: s.version,
     isActive: s.id === activeSceneId,
@@ -298,6 +346,7 @@ export class SceneService {
       throw conflict("This map was changed by someone else. Reload to see the latest version.", { version: current.version });
     }
     if (patch.backgroundAssetId) await this.assets.requireCampaignAsset(patch.backgroundAssetId, m.campaign.id, m.member.userId);
+    if (patch.music) await this.checkMusic(m.campaign.id, patch.music);
     const width = patch.width ?? current.width;
     const height = patch.height ?? current.height;
     this.checkSize(width, height);
@@ -313,6 +362,15 @@ export class SceneService {
       .where(eq(scenes.id, sceneId))
       .returning();
     return row!;
+  }
+
+  private async checkMusic(campaignId: string, music: SceneMusic) {
+    const table = music.kind === "playlist" ? playlists : audioTracks;
+    const [row] = await this.db
+      .select({ id: table.id })
+      .from(table)
+      .where(and(eq(table.id, music.id), eq(table.campaignId, campaignId)));
+    if (!row) throw badRequest(music.kind === "playlist" ? "That playlist isn't in this campaign" : "That track isn't in this campaign");
   }
 
   async remove(m: Membership, sceneId: string): Promise<void> {
@@ -343,6 +401,7 @@ export class SceneService {
           grid: src.grid,
           fogEnabled: src.fogEnabled,
           dmNotes: src.dmNotes,
+          music: src.music,
           sortOrder: src.sortOrder + 1,
         })
         .returning();
@@ -354,6 +413,10 @@ export class SceneService {
       }
       const srcFog = await tx.select().from(fogOps).where(eq(fogOps.sceneId, src.id)).orderBy(asc(fogOps.seq));
       for (const f of srcFog) await tx.insert(fogOps).values({ sceneId: copy!.id, mode: f.mode, shape: f.shape, createdBy: f.createdBy });
+      const srcTemplates = await tx.select().from(mapTemplates).where(eq(mapTemplates.sceneId, src.id));
+      if (srcTemplates.length) {
+        await tx.insert(mapTemplates).values(srcTemplates.map(({ id: _id, createdAt: _c, updatedAt: _u, ...t }) => ({ ...t, sceneId: copy!.id })));
+      }
       return copy!;
     });
   }
@@ -410,13 +473,69 @@ export class SceneService {
   /** Everything one viewer is allowed to know about a scene. */
   async stateFor(m: Membership, sceneId: string): Promise<SceneState> {
     const row = await this.viewable(m, sceneId);
-    const [{ state, ops }, rows] = await Promise.all([this.fogState(row), this.tokenRows(row.id)]);
+    const [{ state, ops }, rows, templates] = await Promise.all([this.fogState(row), this.tokenRows(row.id), this.templateRows(row.id)]);
     const viewer = viewerOf(m);
     const visible = rows
       .map((r) => toTokenDto(r.token, r.character))
       .filter((t) => canSeeToken(t, viewer, state))
       .map((t) => redactToken(t, viewer));
-    return { scene: toSceneDto(row, m.campaign.activeSceneId, m.caps.has("dmNotes.view")), tokens: visible, fog: ops };
+    return {
+      scene: toSceneDto(row, m.campaign.activeSceneId, m.caps.has("dmNotes.view")),
+      tokens: visible,
+      fog: ops,
+      templates: templates.filter((t) => !t.hidden || viewer.isGameMaster).map(toTemplateDto),
+    };
+  }
+
+  // ---- AoE templates -------------------------------------------------------
+
+  templateRows(sceneId: string): Promise<MapTemplateRow[]> {
+    return this.db.select().from(mapTemplates).where(eq(mapTemplates.sceneId, sceneId)).orderBy(asc(mapTemplates.createdAt));
+  }
+
+  /** Anyone who can move tokens may draw templates; only the DM makes hidden ones. */
+  async createTemplate(m: Membership, sceneId: string, input: TemplateInput): Promise<MapTemplateRow> {
+    if (!m.caps.has("token.controlOwn") && !m.caps.has("map.manage")) throw forbidden("Your role can't place templates");
+    if (input.hidden && !m.caps.has("map.manage")) throw forbidden("Only the DM can hide templates");
+    const scene = await this.viewable(m, sceneId);
+    const [{ n } = { n: 0 }] = await this.db.select({ n: sql<number>`count(*)::int` }).from(mapTemplates).where(eq(mapTemplates.sceneId, scene.id));
+    if (n >= MAX_TEMPLATES_PER_SCENE) throw badRequest(`At most ${MAX_TEMPLATES_PER_SCENE} templates per map. Clear some first.`);
+    const [row] = await this.db
+      .insert(mapTemplates)
+      .values({ ...input, campaignId: m.campaign.id, sceneId: scene.id, ownerId: m.member.userId })
+      .returning();
+    return row!;
+  }
+
+  private async ownTemplate(m: Membership, sceneId: string, templateId: string): Promise<MapTemplateRow> {
+    await this.viewable(m, sceneId);
+    const [row] = await this.db
+      .select()
+      .from(mapTemplates)
+      .where(and(eq(mapTemplates.id, templateId), eq(mapTemplates.sceneId, sceneId), eq(mapTemplates.campaignId, m.campaign.id)));
+    if (!row || (row.hidden && !m.caps.has("map.manage"))) throw notFound("Template");
+    if (row.ownerId !== m.member.userId && !m.caps.has("map.manage")) throw forbidden("You can only change your own templates");
+    return row;
+  }
+
+  async updateTemplate(m: Membership, sceneId: string, templateId: string, patch: Partial<TemplateInput>): Promise<{ before: MapTemplateRow; after: MapTemplateRow }> {
+    const before = await this.ownTemplate(m, sceneId, templateId);
+    if (patch.hidden !== undefined && !m.caps.has("map.manage")) throw forbidden("Only the DM can hide templates");
+    const [after] = await this.db.update(mapTemplates).set({ ...patch, updatedAt: new Date() }).where(eq(mapTemplates.id, templateId)).returning();
+    return { before, after: after! };
+  }
+
+  async deleteTemplate(m: Membership, sceneId: string, templateId: string): Promise<MapTemplateRow> {
+    const row = await this.ownTemplate(m, sceneId, templateId);
+    await this.db.delete(mapTemplates).where(eq(mapTemplates.id, templateId));
+    return row;
+  }
+
+  /** DM: remove every template on the map. */
+  async clearTemplates(m: Membership, sceneId: string): Promise<void> {
+    if (!m.caps.has("map.manage")) throw forbidden("Only the DM can clear all templates");
+    await this.viewable(m, sceneId);
+    await this.db.delete(mapTemplates).where(eq(mapTemplates.sceneId, sceneId));
   }
 
   // ---- Tokens ------------------------------------------------------------

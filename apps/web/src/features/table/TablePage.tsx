@@ -25,6 +25,9 @@ import { AudioDock } from "../audio/AudioDock";
 import { MusicPanel } from "../audio/MusicPanel";
 import { useCampaignAudio } from "../audio/useCampaignAudio";
 import { useJournal } from "../dmtools/useJournal";
+import { useTemplateStore } from "../templates/store";
+import { TemplateToolbar, TemplatePanel } from "../templates/TemplateControls";
+import type { MapTemplate } from "@vtt/rules";
 
 export function TablePage() {
   const { id = "" } = useParams();
@@ -57,6 +60,34 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
   const [fogShape, setFogShape] = useState<FogShapeKind>("rect");
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [templateHidden, setTemplateHidden] = useState(false);
+  const templatePreset = useTemplateStore((s) => s.preset);
+  const templateRequest = useTemplateStore((s) => s.request);
+  const canTemplate = caps.has("token.controlOwn") || caps.has("map.manage");
+  // A spell cast (or anything else) asked to place a template: switch to the tool.
+  const lastRequest = useRef(templateRequest);
+  useEffect(() => {
+    if (templateRequest !== lastRequest.current) {
+      lastRequest.current = templateRequest;
+      setTool("template");
+    }
+  }, [templateRequest]);
+  const selectedTemplate = selectedTemplateId ? (table.templates.find((x) => x.id === selectedTemplateId) ?? null) : null;
+  useEffect(() => {
+    if (selectedTemplateId && !table.templates.some((x) => x.id === selectedTemplateId)) setSelectedTemplateId(null);
+  }, [selectedTemplateId, table.templates]);
+  const onPlaceTemplate = useCallback(
+    (tpl: MapTemplate) => {
+      table
+        .createTemplate({ ...tpl, color: templatePreset.color, label: templatePreset.label, hidden: isGM && templateHidden })
+        .then((dto) => {
+          setSelectedTemplateId(dto.id);
+          setTool("select");
+        }, (e) => toast.error(errorMessage(e)));
+    },
+    [table, templatePreset.color, templatePreset.label, isGM, templateHidden],
+  );
   // On phones the map gets the whole screen; panels open as overlays on demand.
   const wide = typeof window === "undefined" || window.innerWidth >= 768;
   const [leftOpen, setLeftOpen] = useState(wide);
@@ -89,6 +120,8 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (isTyping(e)) return;
+      // Keys belong to an open dialog (e.g. Escape closes the sheet, not the selection).
+      if (document.querySelector('[role="dialog"][aria-modal]')) return;
       if (e.code === "Space") {
         e.preventDefault();
         setSpaceHeld(true);
@@ -102,6 +135,7 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
         if (k === "v") setTool("select");
         else if (k === "r") setTool("measure");
         else if (k === "f" && caps.has("fog.manage")) setTool("fog-reveal");
+        else if (k === "t" && (caps.has("token.controlOwn") || caps.has("map.manage"))) setTool("template");
       }
     };
     const up = (e: KeyboardEvent) => {
@@ -215,6 +249,12 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
               ))}
           </>
         )}
+        {canTemplate && table.scene && (
+          <>
+            <ToolButton active={tool === "template"} onClick={() => setTool(tool === "template" ? "select" : "template")} label={t("tool.template")} icon="📐" testId="tool-template" />
+            {tool === "template" && <TemplateToolbar isGM={isGM} hidden={templateHidden} onHidden={setTemplateHidden} />}
+          </>
+        )}
         <ToolButton active={false} onClick={() => canvasRef.current?.fit()} label={t("tool.fit")} icon="⤢" />
         <div className="mx-2 h-5 w-px bg-ink-700" />
         <ToolButton active={toolkit.open && toolkit.tab === "journal"} onClick={() => setToolkit({ open: true, tab: "journal" })} label={t("toolkit.journal")} icon="📖" testId="open-journal" />
@@ -231,6 +271,7 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
         </div>
       </div>
       {tool === "measure" && <Hint>{t("measure.hint")}</Hint>}
+      {tool === "template" && <Hint>{t("template.hint")}</Hint>}
 
       <div className="relative flex min-h-0 flex-1">
         {/* Left sidebar */}
@@ -288,6 +329,11 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
               onSelect={setSelectedId}
               onMoveToken={onMoveToken}
               onFogShape={onFogShape}
+              templates={table.templates}
+              templatePreset={templatePreset}
+              selectedTemplateId={selectedTemplateId}
+              onSelectTemplate={setSelectedTemplateId}
+              onPlaceTemplate={onPlaceTemplate}
             />
           )}
         </div>
@@ -305,6 +351,11 @@ function TableView({ lobby, detail }: { lobby: Lobby; detail: CampaignDetail }) 
                 selectedId={selectedId}
                 onSelectToken={setSelectedId}
               />
+            </Section>
+          )}
+          {table.scene && (selectedTemplate || (isGM && table.templates.length > 0)) && (
+            <Section title={t("template.title")}>
+              <TemplatePanel table={table} selected={selectedTemplate} myId={detail.me.userId} isGM={isGM} onDeselect={() => setSelectedTemplateId(null)} />
             </Section>
           )}
           {table.scene && (

@@ -275,6 +275,11 @@ export const assets = pgTable(
   (t) => [index("assets_owner_idx").on(t.ownerId), index("assets_campaign_idx").on(t.campaignId)],
 );
 
+export interface SceneMusic {
+  kind: "playlist" | "track";
+  id: string;
+}
+
 export const scenes = pgTable(
   "scenes",
   {
@@ -290,6 +295,8 @@ export const scenes = pgTable(
     grid: jsonb("grid").$type<GridSettings>().notNull(),
     fogEnabled: boolean("fog_enabled").notNull().default(false),
     dmNotes: text("dm_notes").notNull().default(""),
+    /** Music that starts when the DM shows this scene to players (Phase 7). */
+    music: jsonb("music").$type<SceneMusic | null>(),
     sortOrder: integer("sort_order").notNull().default(0),
     version: integer("version").notNull().default(1),
     ...timestamps,
@@ -576,3 +583,38 @@ export const campaignAudio = pgTable("campaign_audio", {
 
 export type AudioTrackRow = typeof audioTracks.$inferSelect;
 export type PlaylistRow = typeof playlists.$inferSelect;
+
+/*
+ * Phase 7: area-of-effect templates on a scene.
+ */
+
+export const templateShape = pgEnum("template_shape", ["circle", "cone", "line", "square"]);
+
+export const mapTemplates = pgTable(
+  "map_templates",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    sceneId: uuid("scene_id")
+      .notNull()
+      .references(() => scenes.id, { onDelete: "cascade" }),
+    ownerId: uuid("owner_id").references(() => users.id, { onDelete: "set null" }),
+    shape: templateShape("shape").notNull(),
+    x: doublePrecision("x").notNull(),
+    y: doublePrecision("y").notNull(),
+    /** Game units (ft): radius, side or length. */
+    size: real("size").notNull(),
+    width: real("width").notNull().default(5),
+    angle: real("angle").notNull().default(0),
+    color: text("color").notNull().default("#e0603a"),
+    label: text("label").notNull().default(""),
+    /** DM-only templates (traps, hazards) are not sent to players. */
+    hidden: boolean("hidden").notNull().default(false),
+    ...timestamps,
+  },
+  (t) => [index("map_templates_scene_idx").on(t.sceneId)],
+);
+
+export type MapTemplateRow = typeof mapTemplates.$inferSelect;

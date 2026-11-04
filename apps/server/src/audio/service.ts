@@ -348,6 +348,24 @@ export class AudioService {
     return this.mutate(campaignId, (state, ctx) => applyAudioAction(state, action, ctx));
   }
 
+  /**
+   * Starts a scene's music unless it's already what's playing (so re-showing a
+   * scene doesn't restart its song). Missing tracks/playlists are ignored.
+   */
+  async startSceneMusic(m: Membership, music: { kind: "playlist" | "track"; id: string }): Promise<AudioSnapshot | null> {
+    const current = await this.snapshot(m.campaign.id);
+    const cm = current.state.music;
+    if (cm?.playing) {
+      if (music.kind === "playlist" && cm.playlistId === music.id) return null;
+      if (music.kind === "track" && currentTrackId(cm) === music.id && !cm.playlistId) return null;
+    }
+    try {
+      return await this.control(m, music.kind === "playlist" ? { kind: "playPlaylist", playlistId: music.id } : { kind: "playTrack", trackId: music.id });
+    } catch {
+      return null;
+    }
+  }
+
   /** A one-shot sound effect. Not persisted: whoever is connected hears it once. */
   async sfx(m: Membership, trackId: string): Promise<PlayableTrack> {
     this.requireControl(m);

@@ -27,6 +27,7 @@ const sceneFields = {
   grid: gridSchema.partial(),
   fogEnabled: z.boolean(),
   dmNotes: cleanText(20000),
+  music: z.object({ kind: z.enum(["playlist", "track"]), id: z.uuid() }).nullable(),
   sortOrder: z.number().int().min(0).max(10000),
 };
 
@@ -136,6 +137,14 @@ export async function sceneRoutes(app: FastifyInstance) {
     await scenes.setActive(m, sceneId);
     changed(id);
     await app.ctx.realtime?.sceneActivated(id, previous, sceneId);
+    // Scene music: switch the table's music when the DM shows a scene that has some.
+    if (sceneId && sceneId !== previous && m.caps.has("music.control")) {
+      const music = (await scenes.viewableRaw(id, sceneId))?.music;
+      if (music) {
+        const snap = await app.ctx.audio.startSceneMusic(m, music);
+        if (snap) await app.ctx.realtime?.audioChanged(id, snap);
+      }
+    }
     return { activeSceneId: sceneId };
   });
 }

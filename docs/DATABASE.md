@@ -64,6 +64,8 @@ Enums ใหม่: `asset_kind`, `token_layer`, `token_shape`, `fog_mode`
 | `spells`, `items`, `homebrew_content` | 5–7 | SRD seed + user content; `source` และ licence field |
 | `rulesets` (custom) | 5 | base_ruleset_id + overrides JSONB (ใช้ `buildHomebrewRuleset`) |
 | `journals`, `handouts`, `random_tables` | 5 | visibility per entry + links (note ↔ map/character/item) |
+| `map_templates` | 7 ✅ | AoE template ต่อ scene: shape enum (circle/cone/line/square), x/y (px), size/width (ft), angle (องศา), color, label, hidden, owner_id; สูงสุด 60 ต่อ scene |
+| `scenes.music` (jsonb) | 7 ✅ | `{kind: "playlist" \| "track", id}` — เริ่มเล่นเมื่อแสดงฉาก (migration `0005_phase7_spells_templates.sql`) |
 | `audio_tracks`, `playlists`, `campaign_audio` | 6 ✅ | track: asset_id, category (music/ambient/sfx), tags, duration_sec; playlist: track_ids uuid[] + version; campaign_audio: สถานะการเล่นปัจจุบัน (jsonb, 1 แถวต่อแคมเปญ) |
 | `session_recaps`, `timeline_events` | 7 | เชื่อม game_sessions; recap มีสถานะ draft/approved |
 
