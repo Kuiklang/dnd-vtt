@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { TOKEN_LAYERS, TOKEN_SHAPES, getSrdMonster, type RulesetDefinition, type TokenLayer, type TokenShape } from "@vtt/rules";
+import { LIGHT_PRESETS, TOKEN_LAYERS, TOKEN_SHAPES, getSrdMonster, type RulesetDefinition, type TokenLayer, type TokenShape } from "@vtt/rules";
 import { Button, Field, Input, Select } from "../../components/ui";
 import { errorMessage } from "../../lib/api";
 import { IMAGE_ACCEPT, uploadImage } from "../../lib/upload";
@@ -177,6 +177,39 @@ function TokenEditor({ token, table, detail, campaignId, onSelect }: { token: To
           </label>
         ))}
       </div>
+      <div className="grid grid-cols-2 gap-2">
+        <Field label={t("vision.darkvision")}>
+          <Select
+            value={String(token.sight?.darkvision ?? 0)}
+            onChange={(e) => patch({ sight: Number(e.target.value) > 0 ? { darkvision: Number(e.target.value) } : null })}
+            data-testid="token-darkvision"
+          >
+            {[0, 30, 60, 90, 120].map((ft) => (
+              <option key={ft} value={ft}>
+                {ft ? `${ft} ft` : t("vision.none")}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label={t("vision.light")}>
+          <Select
+            value={lightPreset(token)}
+            onChange={(e) => {
+              const preset = LIGHT_PRESETS[e.target.value];
+              patch({ light: preset ? { ...preset, color: "#ffb347" } : null });
+            }}
+            data-testid="token-light"
+          >
+            <option value="">{t("vision.none")}</option>
+            {Object.entries(LIGHT_PRESETS).map(([k, v]) => (
+              <option key={k} value={k}>
+                {t(`vision.light.${k}` as "vision.light.torch")} ({v.bright}/{v.dim} ft)
+              </option>
+            ))}
+            {lightPreset(token) === "custom" && <option value="custom">{`${token.light!.bright}/${token.light!.dim} ft`}</option>}
+          </Select>
+        </Field>
+      </div>
       <Field label={t("tokens.owners")}>
         <div className="flex flex-wrap gap-x-3 gap-y-1">
           {players.map((m) => (
@@ -229,6 +262,13 @@ function TokenEditor({ token, table, detail, campaignId, onSelect }: { token: To
       </div>
     </div>
   );
+}
+
+/** Which light preset a token uses ("" = none, "custom" = other radii). */
+function lightPreset(token: TokenDto): string {
+  const l = token.light;
+  if (!l || (l.bright <= 0 && l.dim <= 0)) return "";
+  return Object.entries(LIGHT_PRESETS).find(([, v]) => v.bright === l.bright && v.dim === l.dim)?.[0] ?? "custom";
 }
 
 /** DM-only: the stat block a monster token was placed from, with DM-only rolls. */

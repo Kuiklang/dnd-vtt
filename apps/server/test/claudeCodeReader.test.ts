@@ -80,6 +80,8 @@ describe("sheet reader using Claude Code on this computer", () => {
     expect(extractorFromConfig({ ...base, SHEET_READER: "auto" })).toBeNull();
     expect(extractorFromConfig({ ...base, SHEET_READER: "auto", ANTHROPIC_API_KEY: "k" })?.name).toBe("claude");
     expect(extractorFromConfig({ ...base, SHEET_READER: "off", ANTHROPIC_API_KEY: "k" })).toBeNull();
+    // Without SHEET_READER, the shared AI_PROVIDER decides.
+    expect(extractorFromConfig({ ...base, SHEET_READER: undefined, AI_PROVIDER: "claude-code" })?.name).toBe("claude-code");
   });
 
   it("works through the import endpoint", async () => {

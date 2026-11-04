@@ -21,7 +21,7 @@
 | Game session: start / pause / resume / end + history | ✅ |
 | Character: library, sheet ครบ, คำนวณอัตโนมัติ, overrides, autosave, optimistic locking, duplicate, JSON import/export | ✅ |
 | Google login | ⏳ ยังไม่ทำ (ต้องมี OAuth credentials) — UI แจ้งชัดเจน |
-| Character import จาก PDF/รูป (Claude, ตรวจทุก field ก่อนบันทึก) | ✅ ฟรีด้วย Claude Code ในเครื่อง (`SHEET_READER=claude-code`) หรือใช้ `ANTHROPIC_API_KEY` (เสียเงิน) |
+| Character import จาก PDF/รูป (Claude, ตรวจทุก field ก่อนบันทึก) | ✅ ฟรีด้วย Claude Code ในเครื่อง (`AI_PROVIDER=claude-code`) หรือใช้ `ANTHROPIC_API_KEY` (เสียเงิน) |
 | Character creator แบบมีขั้นตอน (5e 2014, SRD 5.1) + ทอยจาก token + dice animation | ✅ Phase 3 |
 | อัปโหลดรูป (map/token) — ตรวจชนิดไฟล์จริง, จำกัดขนาด, เสิร์ฟเฉพาะสมาชิก | ✅ |
 | แผนที่: grid square/hex/none, pan/zoom, หลายแผนที่ + active scene, ทำสำเนา, DM notes | ✅ Konva |
@@ -32,7 +32,7 @@
 | DM Toolkit: bestiary SRD, encounter builder, journal + handouts, random tables, DM screen | ✅ Phase 5 |
 | Music: อัปโหลดเสียง, playlist, เสียงบรรยากาศซ้อนชั้น, เอฟเฟกต์, sync ทุกเครื่อง, ระดับเสียงของผู้เล่นเอง | ✅ Phase 6 |
 | เวท SRD + ร่ายเวทจากชีต (ใช้ slot, ทอยอัตโนมัติ), AoE template บนแผนที่, เพลงประจำฉาก, ส่งไอเทม, concentration, undo/redo, session recap, ไทม์ไลน์ | ✅ Phase 7 |
-| Dynamic lighting & vision, voice chat, AI DM assistant | ⏳ Phase 8 (ดู [docs/ROADMAP.md](docs/ROADMAP.md)) |
+| กำแพง/ประตู/แสง/มุมมองตัวละคร (dynamic lighting & vision), voice chat ในเว็บ, AI ผู้ช่วย DM | ✅ Phase 8 |
 
 ## Tech stack
 
@@ -57,7 +57,7 @@ pnpm dev            # server :3001 + web :5173 (Vite proxy /api และ /socke
 เปิด http://localhost:5173
 
 **อ่าน character sheet จาก PDF/รูปแบบไม่เสียเงิน:** ถ้าคอมที่รัน server ติดตั้ง [Claude Code](https://claude.com/claude-code) และล็อกอินไว้
-(พิมพ์ `claude` ครั้งแรกแล้วล็อกอิน) ให้ใส่ `SHEET_READER=claude-code` ใน `apps/server/.env` แล้วรีสตาร์ท server
+(พิมพ์ `claude` ครั้งแรกแล้วล็อกอิน) ให้ใส่ `AI_PROVIDER=claude-code` ใน `apps/server/.env` (ใช้ทั้งอ่าน sheet และ AI ผู้ช่วย DM) แล้วรีสตาร์ท server
 ระบบจะใช้โควตาแพ็กเกจ Claude ของคุณแทนการจ่ายค่า API (ใช้ได้เฉพาะตอน server รันบนคอมเครื่องนั้น)
 
 ### Production (process เดียว)

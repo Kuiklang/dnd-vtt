@@ -57,6 +57,6 @@ describe("character sheet import", () => {
     expect((await u.client.get(url)).json()).toMatchObject({ available: false });
     const res = await upload(off.app, u.client, {}, pdf, "s.pdf", url);
     expect(res.statusCode).toBe(503);
-    expect(res.json().error.message).toMatch(/SHEET_READER=claude-code/);
+    expect(res.json().error.message).toMatch(/AI_PROVIDER=claude-code/);
   });
 });

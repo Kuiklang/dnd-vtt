@@ -21,9 +21,21 @@ import {
   type TokenShape,
   type TokenState,
   type TokenViewer,
+  type SceneVision,
+  type TokenLight,
+  type TokenSight,
+  type ViewerSight,
+  type Wall,
+  type WallKind,
+  MAX_WALLS,
+  buildViewerSight,
+  isPointVisible,
+  normalizeWall,
+  pxPerUnit,
+  wallForPlayer,
 } from "@vtt/rules";
 import type { Db } from "../db/client.js";
-import { audioTracks, campaigns, characters, fogOps, mapTemplates, playlists, scenes, tokens, type MapTemplateRow, type SceneMusic, type SceneRow, type StatBlockRef, type TokenRow, type TokenStats } from "../db/schema.js";
+import { audioTracks, campaigns, characters, fogOps, mapTemplates, mapWalls, playlists, scenes, tokens, type MapTemplateRow, type MapWallRow, type SceneMusic, type SceneRow, type StatBlockRef, type TokenRow, type TokenStats } from "../db/schema.js";
 import { badRequest, conflict, forbidden, notFound } from "../lib/errors.js";
 import type { CampaignService, Membership } from "../campaigns/service.js";
 import { assetUrl, type AssetService } from "../assets/service.js";
@@ -52,6 +64,8 @@ export interface SceneDto {
   version: number;
   isActive: boolean;
   updatedAt: string;
+  /** Dynamic lighting & vision. */
+  vision: SceneVision;
 }
 
 /** HP/AC/conditions shown on a token; null when not tracked or hidden from the viewer. */
@@ -73,6 +87,8 @@ export interface TokenDto extends TokenState {
   vitalsHidden: boolean;
   /** GM-only: the stat block this token was placed from (null for players). */
   statBlock: StatBlockRef | null;
+  sight: TokenSight | null;
+  light: TokenLight | null;
 }
 
 export interface LinkedCharacter {
@@ -113,6 +129,8 @@ export interface SceneState {
   tokens: TokenDto[];
   fog: FogOpDto[];
   templates: TemplateDto[];
+  /** Walls and doors (secret doors are sent to players as plain walls). */
+  walls: Wall[];
 }
 
 export interface TemplateDto {
@@ -170,6 +188,7 @@ export interface SceneInput {
   dmNotes: string;
   music: SceneMusic | null;
   sortOrder: number;
+  vision: SceneVision;
 }
 
 export interface TokenInput {
@@ -190,6 +209,19 @@ export interface TokenInput {
   ownerIds: string[];
   hpVisibility: HpVisibility;
   stats: TokenStats | null;
+  sight: TokenSight | null;
+  light: TokenLight | null;
+}
+
+export const toWall = (w: MapWallRow): Wall => ({ id: w.id, x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2, kind: w.kind, open: w.open, locked: w.locked });
+
+/** The walls one viewer may know about. */
+export const wallsFor = (walls: Wall[], isGM: boolean): Wall[] => (isGM ? walls : walls.map(wallForPlayer));
+
+/** What one player sees from on a scene (null for GMs, who see everything). */
+export function sightFor(scene: SceneRow, walls: Wall[], all: TokenDto[], viewer: TokenViewer): ViewerSight | null {
+  if (viewer.isGameMaster || !scene.vision?.enabled) return null;
+  return buildViewerSight(scene.vision, walls, all, viewer.userId, pxPerUnit(scene.grid));
 }
 
 export const viewerOf = (m: Membership): TokenViewer => ({ userId: m.member.userId, isGameMaster: m.caps.has("token.manageAll") });
@@ -211,6 +243,7 @@ export function toSceneDto(s: SceneRow, activeSceneId: string | null, showNotes:
     version: s.version,
     isActive: s.id === activeSceneId,
     updatedAt: s.updatedAt.toISOString(),
+    vision: s.vision ?? { enabled: false, ambient: "bright" },
   };
 }
 
@@ -240,6 +273,8 @@ export function toTokenDto(t: TokenRow, character: LinkedCharacter | null = null
     vitals: vitalsOf(t, character),
     vitalsHidden: false,
     statBlock: t.stats?.statBlock ?? null,
+    sight: t.sight ?? null,
+    light: t.light ?? null,
   };
 }
 
@@ -402,6 +437,7 @@ export class SceneService {
           fogEnabled: src.fogEnabled,
           dmNotes: src.dmNotes,
           music: src.music,
+          vision: src.vision,
           sortOrder: src.sortOrder + 1,
         })
         .returning();
@@ -416,6 +452,10 @@ export class SceneService {
       const srcTemplates = await tx.select().from(mapTemplates).where(eq(mapTemplates.sceneId, src.id));
       if (srcTemplates.length) {
         await tx.insert(mapTemplates).values(srcTemplates.map(({ id: _id, createdAt: _c, updatedAt: _u, ...t }) => ({ ...t, sceneId: copy!.id })));
+      }
+      const srcWalls = await tx.select().from(mapWalls).where(eq(mapWalls.sceneId, src.id));
+      if (srcWalls.length) {
+        await tx.insert(mapWalls).values(srcWalls.map(({ id: _id, createdAt: _c, ...w }) => ({ ...w, sceneId: copy!.id })));
       }
       return copy!;
     });
@@ -473,18 +513,88 @@ export class SceneService {
   /** Everything one viewer is allowed to know about a scene. */
   async stateFor(m: Membership, sceneId: string): Promise<SceneState> {
     const row = await this.viewable(m, sceneId);
-    const [{ state, ops }, rows, templates] = await Promise.all([this.fogState(row), this.tokenRows(row.id), this.templateRows(row.id)]);
+    const [{ state, ops }, rows, templates, walls] = await Promise.all([this.fogState(row), this.tokenRows(row.id), this.templateRows(row.id), this.walls(row.id)]);
     const viewer = viewerOf(m);
-    const visible = rows
-      .map((r) => toTokenDto(r.token, r.character))
-      .filter((t) => canSeeToken(t, viewer, state))
-      .map((t) => redactToken(t, viewer));
+    const all = rows.map((r) => toTokenDto(r.token, r.character));
+    const sight = sightFor(row, walls, all, viewer);
+    const visible = all.filter((t) => canSeeToken(t, viewer, state, sight)).map((t) => redactToken(t, viewer));
     return {
       scene: toSceneDto(row, m.campaign.activeSceneId, m.caps.has("dmNotes.view")),
       tokens: visible,
       fog: ops,
       templates: templates.filter((t) => !t.hidden || viewer.isGameMaster).map(toTemplateDto),
+      walls: wallsFor(walls, viewer.isGameMaster),
     };
+  }
+
+  // ---- Walls & doors (dynamic vision) ----------------------------------------
+
+  async walls(sceneId: string): Promise<Wall[]> {
+    const rows = await this.db.select().from(mapWalls).where(eq(mapWalls.sceneId, sceneId)).orderBy(asc(mapWalls.createdAt));
+    return rows.map(toWall);
+  }
+
+  private requireWalls(m: Membership) {
+    if (!m.caps.has("map.manage")) throw forbidden("Only the DM can edit walls");
+  }
+
+  /** DM: adds one or more wall segments (a drawn chain). */
+  async addWalls(m: Membership, sceneId: string, segs: Array<{ x1: number; y1: number; x2: number; y2: number }>, kind: WallKind): Promise<Wall[]> {
+    this.requireWalls(m);
+    await this.sceneRow(m.campaign.id, sceneId);
+    const clean = segs.map(normalizeWall).filter((w): w is NonNullable<typeof w> => !!w);
+    if (!clean.length) throw badRequest("Those walls are too short");
+    const [{ n } = { n: 0 }] = await this.db.select({ n: sql<number>`count(*)::int` }).from(mapWalls).where(eq(mapWalls.sceneId, sceneId));
+    if (n + clean.length > MAX_WALLS) throw badRequest(`A map can hold at most ${MAX_WALLS} walls`);
+    const rows = await this.db
+      .insert(mapWalls)
+      .values(clean.map((w) => ({ ...w, kind, campaignId: m.campaign.id, sceneId })))
+      .returning();
+    return rows.map(toWall);
+  }
+
+  async updateWall(m: Membership, sceneId: string, wallId: string, patch: { kind?: WallKind; locked?: boolean; open?: boolean }): Promise<Wall> {
+    this.requireWalls(m);
+    const [row] = await this.db
+      .update(mapWalls)
+      .set(patch)
+      .where(and(eq(mapWalls.id, wallId), eq(mapWalls.sceneId, sceneId), eq(mapWalls.campaignId, m.campaign.id)))
+      .returning();
+    if (!row) throw notFound("Wall");
+    return toWall(row);
+  }
+
+  async deleteWalls(m: Membership, sceneId: string, wallIds: string[] | "all"): Promise<void> {
+    this.requireWalls(m);
+    await this.sceneRow(m.campaign.id, sceneId);
+    const where = wallIds === "all" ? eq(mapWalls.sceneId, sceneId) : and(eq(mapWalls.sceneId, sceneId), inArray(mapWalls.id, wallIds));
+    await this.db.delete(mapWalls).where(where);
+  }
+
+  /**
+   * Opens or closes a door. The DM can use any door; players can use unlocked doors on
+   * the map they're on that one of their tokens can see (secret doors look like walls to them).
+   */
+  async toggleDoor(m: Membership, sceneId: string, wallId: string): Promise<Wall> {
+    const scene = await this.viewable(m, sceneId);
+    const [row] = await this.db.select().from(mapWalls).where(and(eq(mapWalls.id, wallId), eq(mapWalls.sceneId, sceneId)));
+    if (!row || row.kind === "wall") throw notFound("Door");
+    const isGM = m.caps.has("map.manage");
+    if (!isGM) {
+      if (row.kind === "secret") throw notFound("Door");
+      if (row.locked) throw forbidden("The door is locked");
+      if (!m.caps.has("token.controlOwn")) throw forbidden("Your role can't open doors");
+      if (scene.vision?.enabled) {
+        const [rows, walls] = await Promise.all([this.tokenRows(sceneId), this.walls(sceneId)]);
+        const sight = sightFor(scene, walls, rows.map((r) => toTokenDto(r.token, r.character)), viewerOf(m));
+        const mid = { x: (row.x1 + row.x2) / 2, y: (row.y1 + row.y2) / 2 };
+        // The door itself blocks the line to its middle, so test against the other walls.
+        const others = { ...sight!, walls: sight!.walls.filter((w) => w.id !== row.id) };
+        if (!others.eyes.some((e) => isPointVisibleFrom(others, e, mid))) throw forbidden("You can't see that door");
+      }
+    }
+    const [after] = await this.db.update(mapWalls).set({ open: !row.open }).where(eq(mapWalls.id, wallId)).returning();
+    return toWall(after!);
   }
 
   // ---- AoE templates -------------------------------------------------------
@@ -626,6 +736,8 @@ export class SceneService {
         ownerIds: [...new Set(input.ownerIds ?? [])],
         hpVisibility: hpVis,
         stats: input.stats ?? null,
+        sight: input.sight ?? null,
+        light: input.light ?? null,
       })
       .returning();
     return redactToken(toTokenDto(row!, linked), viewerOf(m));
@@ -732,6 +844,10 @@ export class SceneService {
       .returning();
     return row!;
   }
+}
+
+function isPointVisibleFrom(s: ViewerSight, eye: ViewerSight["eyes"][number], p: { x: number; y: number }): boolean {
+  return isPointVisible({ ...s, eyes: [eye] }, p);
 }
 
 /** Keeps tokens within (a margin around) the scene so they can't be lost off-map. */

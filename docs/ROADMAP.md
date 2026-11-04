@@ -24,7 +24,7 @@ MVP = สิ่งที่กลุ่มหนึ่งใช้เล่น�
 | 5 DM Toolkit | NPC/Monster library (SRD), encounter builder, journal (Markdown), handouts, DM Screen (panels), random tables, custom rulesets UI | ✅ เสร็จ (ยกเว้น custom rulesets UI และระดับความยาก encounter) |
 | 6 Music | audio upload, playlists, ambient layers, realtime sync (DM controls, player local volume) | ✅ เสร็จ (ยังไม่มี crossfade และเพลงประจำ scene) |
 | 7 Advanced ✅ | spell library + casting + AoE templates (ลากย้ายได้), inventory transfer, scene music, concentration, undo/redo, session recap, timeline · ย้ายไปทีหลัง: scene templates, drawing tools, custom layers | เสร็จ 2026-11-04 |
-| 8 Advanced features | dynamic lighting & vision, voice chat (WebRTC, optional), AI DM assistant | |
+| 8 Advanced features | dynamic lighting & vision (กำแพง/ประตู/แสง/darkvision, กรองที่ server), voice chat (WebRTC mesh), AI ผู้ช่วย DM (Claude Code ในเครื่อง) | ✅ เสร็จ 2026-11-04 |
 | 9 Polish | UI polish, performance, security review, docs, accessibility | |
 
 ## Phase 1 — สิ่งที่ส่งมอบ

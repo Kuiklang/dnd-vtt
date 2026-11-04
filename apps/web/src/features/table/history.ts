@@ -27,7 +27,7 @@ const LIMIT = 50;
 const MERGE_MS = 1200;
 
 /** Token fields worth restoring (the ones a client can send). */
-const TOKEN_KEYS = ["name", "imageAssetId", "x", "y", "size", "rotation", "layer", "shape", "color", "borderColor", "hidden", "locked", "showName", "ownerIds", "hpVisibility", "characterId"] as const;
+const TOKEN_KEYS = ["name", "imageAssetId", "x", "y", "size", "rotation", "layer", "shape", "color", "borderColor", "hidden", "locked", "showName", "ownerIds", "hpVisibility", "characterId", "sight", "light"] as const;
 const TEMPLATE_KEYS = ["shape", "x", "y", "size", "width", "angle", "color", "label", "hidden"] as const;
 
 function pick<T extends object, K extends keyof T>(o: T, keys: readonly K[]): Partial<T> {

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { GRID_TYPES, HP_VISIBILITY, TOKEN_LAYERS, TOKEN_SHAPES } from "@vtt/rules";
+import { AMBIENT_LIGHTS, GRID_TYPES, HP_VISIBILITY, MAX_SIGHT_FT, TOKEN_LAYERS, TOKEN_SHAPES } from "@vtt/rules";
 import { requireAuth } from "../auth/routes.js";
 import { cleanText, parse } from "../lib/validation.js";
 import { toSceneDto } from "./service.js";
@@ -29,6 +29,7 @@ const sceneFields = {
   dmNotes: cleanText(20000),
   music: z.object({ kind: z.enum(["playlist", "track"]), id: z.uuid() }).nullable(),
   sortOrder: z.number().int().min(0).max(10000),
+  vision: z.object({ enabled: z.boolean(), ambient: z.enum(AMBIENT_LIGHTS) }),
 };
 
 export const sceneCreateSchema = z.object({ ...sceneFields }).partial().required({ name: true });
@@ -70,6 +71,8 @@ export const tokenFields = z.object({
   ownerIds: z.array(z.uuid()).max(20),
   hpVisibility: z.enum(HP_VISIBILITY),
   stats: tokenStatsSchema.nullable(),
+  sight: z.object({ darkvision: z.number().min(0).max(MAX_SIGHT_FT) }).nullable(),
+  light: z.object({ bright: z.number().min(0).max(MAX_SIGHT_FT), dim: z.number().min(0).max(MAX_SIGHT_FT), color: hexColor }).nullable(),
 });
 
 const params = z.object({ id: z.uuid(), sceneId: z.uuid() });

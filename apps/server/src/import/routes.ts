@@ -45,7 +45,7 @@ export async function sheetImportRoutes(app: FastifyInstance, opts: { extractor:
   app.post("/api/characters/import/sheet", async (req) => {
     const { user } = requireAuth(req);
     if (!extractor) {
-      throw new HttpError(503, "import_unavailable", "Reading sheets from PDFs and photos isn't set up on this server yet (set SHEET_READER=claude-code or ANTHROPIC_API_KEY in the server .env).");
+      throw new HttpError(503, "import_unavailable", "Reading sheets from PDFs and photos isn't set up on this server yet (set AI_PROVIDER=claude-code or ANTHROPIC_API_KEY in the server .env).");
     }
     if (!req.isMultipart()) throw badRequest("Send the file as multipart/form-data");
     let bytes: Buffer | null = null;

@@ -3,6 +3,7 @@
  * filters with the same logic the client uses to decide what to offer.
  */
 import { isPointRevealed, type FogState } from "./fog.js";
+import { isPointVisible, type ViewerSight } from "./vision.js";
 
 export const TOKEN_LAYERS = ["map", "objects", "tokens", "dm"] as const;
 export type TokenLayer = (typeof TOKEN_LAYERS)[number];
@@ -58,13 +59,21 @@ export interface TokenViewer {
   isGameMaster: boolean;
 }
 
-/** Whether a viewer may receive this token at all. */
-export function canSeeToken(t: TokenState, viewer: TokenViewer, fog: FogState): boolean {
+/**
+ * Whether a viewer may receive this token at all. With dynamic vision on (`sight`), a
+ * player also needs line of sight to it from one of their own tokens, in light or
+ * darkvision; manual fog and vision both apply (the stricter wins).
+ */
+export function canSeeToken(t: TokenState, viewer: TokenViewer, fog: FogState, sight?: ViewerSight | null): boolean {
   if (viewer.isGameMaster) return true;
   if (t.hidden || t.layer === "dm") return false;
   if (t.ownerIds.includes(viewer.userId)) return true;
   // Map art and objects are drawn under fog anyway; tokens are filtered by their centre.
-  return isPointRevealed(fog, { x: t.x, y: t.y });
+  const p = { x: t.x, y: t.y };
+  if (!isPointRevealed(fog, p)) return false;
+  // Map-layer art is part of the map, not a creature: darkness is drawn over it instead.
+  if (sight?.enabled && t.layer !== "map" && !isPointVisible(sight, p)) return false;
+  return true;
 }
 
 /** Fields a token owner (non-GM) may change. Everything else is GM-only. */

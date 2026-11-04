@@ -13,7 +13,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { ActionEconomy, AudioState, CharacterData, Defenses, FogShape, GridSettings, HpState, RollResult, TokenCondition } from "@vtt/rules";
+import type { ActionEconomy, AudioState, CharacterData, Defenses, FogShape, GridSettings, HpState, RollResult, SceneVision, TokenCondition, TokenLight, TokenSight } from "@vtt/rules";
 
 
 /*
@@ -300,6 +300,8 @@ export const scenes = pgTable(
     dmNotes: text("dm_notes").notNull().default(""),
     /** Music that starts when the DM shows this scene to players (Phase 7). */
     music: jsonb("music").$type<SceneMusic | null>(),
+    /** Dynamic lighting & vision settings (Phase 8). */
+    vision: jsonb("vision").$type<SceneVision>().notNull().default({ enabled: false, ambient: "bright" }),
     sortOrder: integer("sort_order").notNull().default(0),
     version: integer("version").notNull().default(1),
     ...timestamps,
@@ -339,6 +341,10 @@ export const tokens = pgTable(
      * character read and write HP/conditions on the character instead (single source of truth).
      */
     stats: jsonb("stats").$type<TokenStats>(),
+    /** Senses (darkvision) used by dynamic vision (Phase 8). */
+    sight: jsonb("sight").$type<TokenSight | null>(),
+    /** Light the token gives off (torch, lantern...). */
+    light: jsonb("light").$type<TokenLight | null>(),
     version: integer("version").notNull().default(1),
     ...timestamps,
   },
@@ -651,3 +657,30 @@ export const timelineEvents = pgTable(
 );
 export type TimelineEventRow = typeof timelineEvents.$inferSelect;
 export type GameSessionRow = typeof gameSessions.$inferSelect;
+
+export const wallKind = pgEnum("wall_kind", ["wall", "door", "secret"]);
+
+/** Sight-blocking walls and doors on a scene (Phase 8 dynamic vision). */
+export const mapWalls = pgTable(
+  "map_walls",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    campaignId: uuid("campaign_id")
+      .notNull()
+      .references(() => campaigns.id, { onDelete: "cascade" }),
+    sceneId: uuid("scene_id")
+      .notNull()
+      .references(() => scenes.id, { onDelete: "cascade" }),
+    x1: doublePrecision("x1").notNull(),
+    y1: doublePrecision("y1").notNull(),
+    x2: doublePrecision("x2").notNull(),
+    y2: doublePrecision("y2").notNull(),
+    kind: wallKind("kind").notNull().default("wall"),
+    open: boolean("open").notNull().default(false),
+    locked: boolean("locked").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("map_walls_scene_idx").on(t.sceneId)],
+);
+
+export type MapWallRow = typeof mapWalls.$inferSelect;

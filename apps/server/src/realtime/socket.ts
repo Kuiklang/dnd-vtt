@@ -1,10 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { Server, type Socket } from "socket.io";
 import { z } from "zod";
-import { CHAT_CHANNELS, FOG_SHAPES, ROLL_VISIBILITIES, canSeeChatMessage, canSeeToken, type CampaignRole, type Capability, type FogShape } from "@vtt/rules";
+import { CHAT_CHANNELS, FOG_SHAPES, ROLL_VISIBILITIES, WALL_KINDS, canSeeChatMessage, canSeeToken, type CampaignRole, type Capability, type FogShape } from "@vtt/rules";
 import { tokenConditionSchema, tokenFields } from "../scenes/routes.js";
 import type { CombatEffects } from "../combat/service.js";
-import { redactToken, toSceneDto, toTemplateDto, toTokenDto } from "../scenes/service.js";
+import { redactToken, sightFor, toSceneDto, toTemplateDto, toTokenDto, wallsFor } from "../scenes/service.js";
+import type { SceneRow } from "../db/schema.js";
+import { VoiceChannels, iceServersFrom, signalSchema } from "./voice.js";
 import { SESSION_COOKIE, type AppContext } from "../context.js";
 import { HttpError } from "../lib/errors.js";
 import { rollForViewer, viewerFor, type ChatMessageDto, type RollDto } from "../chat/service.js";
@@ -132,6 +134,7 @@ const fogShapeSchema = z.discriminatedUnion("kind", [
 export class Realtime {
   readonly io: Server;
   private presence = new Map<string, Map<string, PresenceEntry>>();
+  readonly voice: VoiceChannels;
   /** Per-campaign timer that advances the music queue when a track ends. */
   private audioTimers = new Map<string, NodeJS.Timeout>();
 
@@ -152,6 +155,7 @@ export class Realtime {
       },
       maxHttpBufferSize: 256 * 1024,
     });
+    this.voice = new VoiceChannels(this.io, iceServersFrom(ctx.config.VOICE_ICE_SERVERS));
     this.io.use(async (socket, next) => {
       try {
         const cookies = app.parseCookie(socket.handshake.headers.cookie ?? "");
@@ -392,7 +396,45 @@ export class Realtime {
       const m = await campaigns.membership(i.campaignId, data.userId);
       const dto = await scenes.deleteToken(m, i.sceneId, i.tokenId);
       this.io.to(sceneRoom(i.sceneId)).emit("token:remove", { sceneId: i.sceneId, tokenId: dto.id });
+      // A removed light or viewer changes what players see.
+      const scene = await scenes.viewableRaw(i.campaignId, i.sceneId);
+      if (scene?.vision?.enabled) await this.broadcastVisionTokens(i.campaignId, scene, null);
       return { id: dto.id };
+    });
+
+    // ---- Walls & doors (dynamic vision) -----------------------------------
+
+    const wallSeg = z.object({ x1: z.number(), y1: z.number(), x2: z.number(), y2: z.number() });
+    this.handle(s, "wall:add", sceneRef.extend({ walls: z.array(wallSeg).min(1).max(200), kind: z.enum(WALL_KINDS).default("wall") }), async (i) => {
+      const m = await campaigns.membership(i.campaignId, data.userId);
+      const added = await scenes.addWalls(m, i.sceneId, i.walls, i.kind);
+      await this.sendSceneState(i.campaignId, i.sceneId);
+      return { walls: added };
+    });
+
+    this.handle(
+      s,
+      "wall:update",
+      sceneRef.extend({ wallId: z.uuid(), patch: z.object({ kind: z.enum(WALL_KINDS), locked: z.boolean(), open: z.boolean() }).partial() }),
+      async (i) => {
+        const m = await campaigns.membership(i.campaignId, data.userId);
+        const wall = await scenes.updateWall(m, i.sceneId, i.wallId, i.patch);
+        await this.sendSceneState(i.campaignId, i.sceneId);
+        return wall;
+      },
+    );
+
+    this.handle(s, "wall:delete", sceneRef.extend({ wallIds: z.union([z.array(z.uuid()).min(1).max(500), z.literal("all")]) }), async (i) => {
+      const m = await campaigns.membership(i.campaignId, data.userId);
+      await scenes.deleteWalls(m, i.sceneId, i.wallIds);
+      await this.sendSceneState(i.campaignId, i.sceneId);
+    });
+
+    this.handle(s, "door:toggle", sceneRef.extend({ wallId: z.uuid() }), async (i) => {
+      const m = await campaigns.membership(i.campaignId, data.userId);
+      const wall = await scenes.toggleDoor(m, i.sceneId, i.wallId);
+      await this.sendSceneState(i.campaignId, i.sceneId);
+      return { open: wall.open };
     });
 
     this.handle(s, "fog:add", sceneRef.extend({ mode: z.enum(["reveal", "hide"]), shape: fogShapeSchema }), async (i) => {
@@ -504,7 +546,30 @@ export class Realtime {
       return res.token;
     });
 
+    // ---- Voice chat (WebRTC signalling) -------------------------------------
+
+    this.handle(s, "voice:join", campaignIdSchema, async ({ campaignId }) => {
+      await campaigns.membership(campaignId, data.userId);
+      try {
+        return this.voice.join(s, campaignId, data.userId, data.displayName);
+      } catch {
+        throw new HttpError(400, "voice_full", "Voice chat is full");
+      }
+    });
+    this.handle(s, "voice:leave", campaignIdSchema, async ({ campaignId }) => {
+      this.voice.leave(s, campaignId);
+    });
+    this.handle(s, "voice:mute", campaignIdSchema.extend({ muted: z.boolean() }), async ({ campaignId, muted }) => {
+      if (!this.voice.setMuted(s, campaignId, muted)) throw new HttpError(400, "bad_request", "Join voice first");
+    });
+    // Signalling bypasses the general rate limit (it has its own) and needs no reply.
+    s.on("voice:signal", (raw: unknown) => {
+      const parsed = signalSchema.safeParse(raw);
+      if (parsed.success) this.voice.relay(s, parsed.data);
+    });
+
     s.on("disconnect", () => {
+      this.voice.leaveAll(s);
       for (const campaignId of data.campaigns) this.removePresence(campaignId, data.userId, s.id, false);
     });
   }
@@ -512,6 +577,7 @@ export class Realtime {
   private leaveRoom(s: Socket, campaignId: string, graceful: boolean) {
     const data = s.data as SocketData;
     void s.leave(room(campaignId));
+    this.voice.leave(s, campaignId);
     data.campaigns.delete(campaignId);
     const sceneId = data.scenes.get(campaignId);
     if (sceneId) void s.leave(sceneRoom(sceneId));
@@ -644,6 +710,7 @@ export class Realtime {
     try {
       const scene = await this.ctx.scenes.viewableRaw(campaignId, sceneId);
       if (!scene) return;
+      if (scene.vision?.enabled) return await this.broadcastVisionTokens(campaignId, scene, tokenId);
       const [{ state }, dto] = await Promise.all([this.ctx.scenes.fogState(scene), this.ctx.scenes.tokenDto(tokenId)]);
       for (const v of await this.sceneViewers(campaignId, sceneId)) {
         const viewer = { userId: v.userId, isGameMaster: v.caps.has("token.manageAll") };
@@ -655,16 +722,40 @@ export class Realtime {
     }
   }
 
+  /**
+   * With dynamic vision, moving any token (or its light) can change what every player
+   * sees, so each player gets their full visible token list; GMs just get the token.
+   */
+  private async broadcastVisionTokens(campaignId: string, scene: SceneRow, tokenId: string | null) {
+    const [{ state }, rows, walls] = await Promise.all([this.ctx.scenes.fogState(scene), this.ctx.scenes.tokenRows(scene.id), this.ctx.scenes.walls(scene.id)]);
+    const all = rows.map((r) => toTokenDto(r.token, r.character));
+    const changed = tokenId ? all.find((t) => t.id === tokenId) : undefined;
+    for (const v of await this.sceneViewers(campaignId, scene.id)) {
+      const viewer = { userId: v.userId, isGameMaster: v.caps.has("token.manageAll") };
+      if (viewer.isGameMaster) {
+        if (changed) v.sock.emit("token:upsert", changed);
+        else if (tokenId) v.sock.emit("token:remove", { sceneId: scene.id, tokenId });
+        continue;
+      }
+      const sight = sightFor(scene, walls, all, viewer);
+      v.sock.emit("scene:tokens", {
+        sceneId: scene.id,
+        tokens: all.filter((t) => canSeeToken(t, viewer, state, sight)).map((t) => redactToken(t, viewer)),
+      });
+    }
+  }
+
   /** Pushes the full, per-viewer filtered scene state (after fog/scene changes). */
   async sendSceneState(campaignId: string, sceneId: string) {
     try {
       const scene = await this.ctx.scenes.viewableRaw(campaignId, sceneId);
       if (!scene) return;
-      const [{ state, ops }, rows, activeSceneId, templates] = await Promise.all([
+      const [{ state, ops }, rows, activeSceneId, templates, walls] = await Promise.all([
         this.ctx.scenes.fogState(scene),
         this.ctx.scenes.tokenRows(sceneId),
         this.ctx.scenes.activeSceneId(campaignId),
         this.ctx.scenes.templateRows(sceneId),
+        this.ctx.scenes.walls(sceneId),
       ]);
       const all = rows.map((r) => toTokenDto(r.token, r.character));
       for (const v of await this.sceneViewers(campaignId, sceneId)) {
@@ -674,11 +765,13 @@ export class Realtime {
           continue;
         }
         const viewer = { userId: v.userId, isGameMaster: isGM };
+        const sight = sightFor(scene, walls, all, viewer);
         v.sock.emit("scene:state", {
           scene: toSceneDto(scene, activeSceneId, v.caps.has("dmNotes.view")),
-          tokens: all.filter((t) => canSeeToken(t, viewer, state)).map((t) => redactToken(t, viewer)),
+          tokens: all.filter((t) => canSeeToken(t, viewer, state, sight)).map((t) => redactToken(t, viewer)),
           fog: ops,
           templates: templates.filter((t) => !t.hidden || isGM).map(toTemplateDto),
+          walls: wallsFor(walls, isGM),
         });
       }
     } catch (err) {

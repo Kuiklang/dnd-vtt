@@ -9,9 +9,10 @@ import { DmScreen } from "./DmScreen";
 import { EncounterPanel } from "./EncounterPanel";
 import { JournalPanel } from "./JournalPanel";
 import { TablesPanel } from "./TablesPanel";
+import { AiAssistantPanel } from "./AiAssistantPanel";
 import type { Journal } from "./useJournal";
 
-export type ToolkitTab = "journal" | "bestiary" | "encounters" | "tables" | "screen";
+export type ToolkitTab = "journal" | "bestiary" | "encounters" | "tables" | "screen" | "ai";
 
 interface Props {
   open: boolean;
@@ -32,6 +33,7 @@ const TABS: Array<{ id: ToolkitTab; key: MessageKey; cap: string | null }> = [
   { id: "encounters", key: "toolkit.encounters", cap: "npc.manage" },
   { id: "tables", key: "toolkit.tables", cap: "tables.manage" },
   { id: "screen", key: "toolkit.screen", cap: "journal.manage" },
+  { id: "ai", key: "ai.title", cap: "dmNotes.view" },
 ];
 
 /** Journal for everyone; bestiary, encounters, random tables and the DM screen for those with the capability. */
@@ -65,6 +67,7 @@ export function DmToolkit({ open, onClose, tab, onTab, detail, journal, ruleset,
       {current === "encounters" && <EncounterPanel campaignId={detail.campaign.id} partySize={partySize} onPlace={onPlace} onFight={onFight} />}
       {current === "tables" && <TablesPanel campaignId={detail.campaign.id} />}
       {current === "screen" && <DmScreen ruleset={ruleset} onRoll={onRoll} />}
+      {current === "ai" && <AiAssistantPanel campaignId={detail.campaign.id} />}
     </Modal>
   );
 }
