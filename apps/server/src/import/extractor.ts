@@ -16,7 +16,7 @@ export interface SheetExtractor {
   extract(file: SheetFile, hint: { rulesetName: string }): Promise<ExtractedSheet>;
 }
 
-const INSTRUCTIONS = `You read tabletop RPG character sheets (D&D 5e and similar) from a PDF or a photo and transcribe them into the given JSON schema.
+export const SHEET_INSTRUCTIONS = `You read tabletop RPG character sheets (D&D 5e and similar) from a PDF or a photo and transcribe them into the given JSON schema.
 
 Transcribe only what is written on the sheet. Never invent values: if a field is blank, illegible or missing, use null (or an empty list), and add its path to uncertainFields when you had to guess between readings (for example "abilities.wis" or "attacks.0.damage").
 Ability scores are the large scores (usually 1-30), not the modifiers. Attack bonuses are the printed to-hit numbers as integers. Damage should be a dice expression such as "1d8+3" when one is printed.
@@ -51,7 +51,7 @@ export class ClaudeSheetExtractor implements SheetExtractor {
         betas: ["server-side-fallback-2026-07-01"],
         fallbacks: "default",
         output_config: { effort: "medium", format: betaZodOutputFormat(extractedSheetSchema) },
-        system: INSTRUCTIONS.replace("{RULESET}", hint.rulesetName),
+        system: SHEET_INSTRUCTIONS.replace("{RULESET}", hint.rulesetName),
         messages: [{ role: "user", content: [source, { type: "text", text: "Transcribe this character sheet." }] }],
       });
       if (response.stop_reason === "refusal") throw new HttpError(422, "import_refused", "The sheet couldn't be read. Try a clearer image or enter it by hand.");
@@ -72,8 +72,4 @@ export class ClaudeSheetExtractor implements SheetExtractor {
       throw e;
     }
   }
-}
-
-export function extractorFromConfig(cfg: { ANTHROPIC_API_KEY?: string; IMPORT_MODEL: string }): SheetExtractor | null {
-  return cfg.ANTHROPIC_API_KEY ? new ClaudeSheetExtractor(cfg.ANTHROPIC_API_KEY, cfg.IMPORT_MODEL) : null;
 }

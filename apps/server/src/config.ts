@@ -17,11 +17,21 @@ const envSchema = z.object({
   UPLOAD_DIR: z.string().default("./data/uploads"),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   GUEST_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(7),
-  /** Claude API key for reading character sheets from PDFs/photos. Unset = import disabled (UI says so). */
+  /**
+   * Who reads character sheets from PDFs/photos: "claude-code" (the Claude Code CLI signed in on
+   * this computer, uses your Claude plan, no API bill), "api" (ANTHROPIC_API_KEY, paid per use),
+   * "auto" (the API if a key is set, else off) or "off". When off, the UI says so.
+   */
+  SHEET_READER: z.enum(["auto", "api", "claude-code", "off"]).default("auto"),
+  /** The `claude` command for SHEET_READER=claude-code (full path if it isn't on PATH). */
+  CLAUDE_CODE_PATH: z.string().default("claude"),
+  /** Optional model for SHEET_READER=claude-code; empty = your plan's default. */
+  CLAUDE_CODE_MODEL: z.string().optional(),
+  /** Claude API key for SHEET_READER=api/auto. Never sent to browsers. */
   ANTHROPIC_API_KEY: z.string().optional(),
   /** Model used for sheet import. */
   IMPORT_MODEL: z.string().default("claude-opus-5-5"),
-  /** Sheet imports allowed per user per hour (each one is a paid API call). */
+  /** Sheet imports allowed per user per hour (each one is an AI call). */
   IMPORT_PER_HOUR: z.coerce.number().int().min(1).max(1000).default(10),
   /** Disable rate limiting (tests only). */
   RATE_LIMIT: z

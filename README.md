@@ -21,7 +21,7 @@
 | Game session: start / pause / resume / end + history | ✅ |
 | Character: library, sheet ครบ, คำนวณอัตโนมัติ, overrides, autosave, optimistic locking, duplicate, JSON import/export | ✅ |
 | Google login | ⏳ ยังไม่ทำ (ต้องมี OAuth credentials) — UI แจ้งชัดเจน |
-| Character import จาก PDF/รูป (Claude API, ตรวจทุก field ก่อนบันทึก) | ✅ ต้องตั้ง `ANTHROPIC_API_KEY` ที่ server |
+| Character import จาก PDF/รูป (Claude, ตรวจทุก field ก่อนบันทึก) | ✅ ฟรีด้วย Claude Code ในเครื่อง (`SHEET_READER=claude-code`) หรือใช้ `ANTHROPIC_API_KEY` (เสียเงิน) |
 | Character creator แบบมีขั้นตอน (5e 2014, SRD 5.1) + ทอยจาก token + dice animation | ✅ Phase 3 |
 | อัปโหลดรูป (map/token) — ตรวจชนิดไฟล์จริง, จำกัดขนาด, เสิร์ฟเฉพาะสมาชิก | ✅ |
 | แผนที่: grid square/hex/none, pan/zoom, หลายแผนที่ + active scene, ทำสำเนา, DM notes | ✅ Konva |
@@ -55,6 +55,10 @@ pnpm dev            # server :3001 + web :5173 (Vite proxy /api และ /socke
 ```
 
 เปิด http://localhost:5173
+
+**อ่าน character sheet จาก PDF/รูปแบบไม่เสียเงิน:** ถ้าคอมที่รัน server ติดตั้ง [Claude Code](https://claude.com/claude-code) และล็อกอินไว้
+(พิมพ์ `claude` ครั้งแรกแล้วล็อกอิน) ให้ใส่ `SHEET_READER=claude-code` ใน `apps/server/.env` แล้วรีสตาร์ท server
+ระบบจะใช้โควตาแพ็กเกจ Claude ของคุณแทนการจ่ายค่า API (ใช้ได้เฉพาะตอน server รันบนคอมเครื่องนั้น)
 
 ### Production (process เดียว)
 

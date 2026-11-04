@@ -12,7 +12,7 @@ export function sniffSheet(buf: Buffer): SheetMime | null {
   return sniffImage(buf);
 }
 
-/** Sliding one-hour window per user; each import is a paid API call. */
+/** Sliding one-hour window per user; each import is an AI call. */
 class HourlyLimiter {
   private hits = new Map<string, number[]>();
   constructor(private readonly perHour: number) {}
@@ -45,7 +45,7 @@ export async function sheetImportRoutes(app: FastifyInstance, opts: { extractor:
   app.post("/api/characters/import/sheet", async (req) => {
     const { user } = requireAuth(req);
     if (!extractor) {
-      throw new HttpError(503, "import_unavailable", "Reading sheets from PDFs and photos isn't set up on this server yet (needs ANTHROPIC_API_KEY).");
+      throw new HttpError(503, "import_unavailable", "Reading sheets from PDFs and photos isn't set up on this server yet (set SHEET_READER=claude-code or ANTHROPIC_API_KEY in the server .env).");
     }
     if (!req.isMultipart()) throw badRequest("Send the file as multipart/form-data");
     let bytes: Buffer | null = null;
