@@ -4,7 +4,7 @@
 > เอกสารนี้คือบันทึกความคืบหน้าหลักของโปรเจกต์ อัปเดตทุกครั้งที่จบงานแต่ละช่วง
 > รายการงานย่อยและสถานะจริงอยู่ใน [TODO.md](TODO.md) · รายละเอียดเชิงเทคนิคอยู่ใน [docs/](docs/)
 
-ปรับปรุงล่าสุด: **2026-11-04** · สถานะ: **Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ · Phase 4 ✅ · Phase 5 ✅ · Phase 6 ✅ → MVP ครบ · Phase 7 🟡 (รอบแรกเสร็จ: เวท SRD + ร่ายเวท, AoE template, เพลงประจำฉาก, ส่งไอเทม) · ถัดไป Phase 7 รอบสอง**
+ปรับปรุงล่าสุด: **2026-11-04** · สถานะ: **Phase 1 ✅ · Phase 2 ✅ · Phase 3 ✅ · Phase 4 ✅ · Phase 5 ✅ · Phase 6 ✅ → MVP ครบ · Phase 7 ✅ (เวท SRD + ร่ายเวท, AoE template, เพลงประจำฉาก, ส่งไอเทม, concentration, undo/redo, recap + timeline) · ถัดไป Phase 8**
 
 ---
 
@@ -63,7 +63,7 @@
 | 3 Character & Dice | character creator wizard, dice animation, character import (PDF/รูป), ability checks จาก token *(token↔character HP sync ทำแล้วใน Phase 4)* | ✅ เสร็จ |
 | 5 DM Toolkit | NPC/Monster library, encounter builder, journal, handouts, DM screen, random tables | ✅ เสร็จ |
 | 6 Music | audio upload, playlist, ambient, realtime sync | ✅ เสร็จ |
-| 7 Advanced | spells/AoE ✅, ส่งไอเทม ✅, เพลงประจำฉาก ✅ · เหลือ: scene templates, undo/redo, session recap, timeline, drawing tools, custom layers | 🟡 รอบแรกเสร็จ |
+| 7 Advanced | spells/AoE, ส่งไอเทม, เพลงประจำฉาก, concentration, undo/redo, session recap, timeline ✅ · ย้ายไปทำทีหลัง: scene templates, drawing tools, custom layers | ✅ เสร็จ (2 รอบ) |
 | 8 Advanced features | dynamic lighting & vision, voice chat, AI DM assistant | |
 | 9 Polish | UI polish, performance, security review, docs | |
 
@@ -336,7 +336,49 @@
 
 - คลังเวทมี 51 บท (ที่ใช้บ่อย) ไม่ใช่ SRD ครบทุกบท; เวทที่ไม่มีในคลังพิมพ์เองได้ แต่ร่ายแล้วจะไม่ทอยอัตโนมัติ
 - ยังไม่ทำ concentration tracking อัตโนมัติ (แสดงป้าย "concentration" ใน log), ยังไม่หัก HP จากเวทอัตโนมัติ (DM ใช้ปุ่ม damage บน token)
-- Template ลากย้ายไม่ได้ (ลบแล้ววางใหม่ / หมุน 45°)
+- Template ลากย้ายไม่ได้ (ลบแล้ววางใหม่ / หมุน 45°) — *แก้แล้วในรอบสอง*
+
+### 2026-11-04 — Phase 7 (รอบสอง): Concentration, Undo/redo, Session recap, Timeline ✅
+
+**สิ่งที่ใช้งานได้จริง**
+
+- **ลากย้าย template**: เจ้าของหรือ DM ลากพื้นที่ไปวางใหม่ได้ (เครื่องมือเลือก) วงไฮไลต์โทเคนเปลี่ยนตามขณะลาก แล้ว sync ทุกเครื่อง
+- **Concentration**: ร่ายเวท concentration แล้ว server บันทึกในชีตเอง (ร่ายบทใหม่ = เลิกบทเก่า และแจ้งใน log);
+  ชีตและแผงโทเคนมีป้าย "🔮 Concentrating on Bless" พร้อมปุ่มทอย Con save และปุ่ม End;
+  เมื่อโทเคนโดนดาเมจ server โพสต์ "Elara must make a DC 12 Constitution save…" (DC = 10 หรือครึ่งดาเมจ ตาม SRD);
+  HP เหลือ 0 = หลุด concentration อัตโนมัติ; จบ concentration ได้เฉพาะเจ้าของหรือ DM
+- **Undo/redo** (ปุ่ม ↶ ↷ หรือ Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y): ย้อนการวาง/ย้าย/แก้/ลบโทเคน, หมอก, template ที่ตัวเองทำ
+  (สูงสุด 50 ขั้นต่อแผนที่) — ย้อนโดยส่งคำสั่งตรงข้ามผ่าน server ตามปกติ สิทธิ์จึงถูกตรวจซ้ำและทุกคนเห็นทันที;
+  โทเคนที่ลบแล้วกู้คืนได้พร้อม HP/AC ของโทเคน
+- **Session recap**: ในหน้า 🕰 ไทม์ไลน์ DM กด "ร่างจาก log ของเซสชัน" ได้ร่างอัตโนมัติ (เหตุการณ์ใน log สาธารณะ, จำนวนทอย,
+  ดาเมจสูงสุด, nat 20/nat 1) แล้วแก้และ "เผยแพร่ให้ผู้เล่น"; ผู้เล่นไม่ได้รับเนื้อหา recap จนกว่าจะเผยแพร่ และร่างไม่ดึงข้อความช่อง DM หรือการทอยที่ซ่อน
+- **Campaign timeline**: แสดงทุกเซสชันตามลำดับพร้อม recap และ "เหตุการณ์ในเรื่อง" ที่ DM เพิ่ม (วันที่ในโลกเกมพิมพ์อิสระ, ผูกกับเซสชันได้,
+  ตั้งเป็น "เฉพาะ DM" ได้ — ผู้เล่นไม่ได้รับข้อมูลเลย) เปิดได้ทั้งจากล็อบบี้และโต๊ะ, อัปเดต realtime
+- **แก้ช่องโหว่จากรอบแรก**: DM ร่ายเวทแบบทอยซ่อน (เช่น NPC) ข้อความ "X casts Y" เคยขึ้นให้ทุกคน → ตอนนี้ไปช่อง DM เท่านั้น
+- Esc ปิดหน้าต่างโดยไม่ไปยกเลิกการเลือกโทเคนบนแผนที่
+
+**การทดสอบ (รันจริงทั้งหมด)**
+
+| ชุด | ผล |
+| --- | --- |
+| `packages/rules` unit (+ DC ของ concentration) | 156/156 ✅ |
+| `apps/server` integration (เพิ่ม `test/phase7b.test.ts` 5 ตัว: concentration เริ่ม/เปลี่ยน/DC/จบ/HP 0, ร่ายซ่อนแจ้งเฉพาะ DM, ร่าง recap + สิทธิ์ + การเผยแพร่, event เฉพาะ DM + validation, ข้อความร่าง) | 66/66 ✅ |
+| `apps/web` unit | 12/12 ✅ |
+| E2E Phase 7b: ร่าย Bless → ป้าย concentration, DM ทำดาเมจ 24 → log ขอ DC 12, ผู้เล่นทอย Con save แล้วกด End, ลาก template แล้ว DM เห็นตำแหน่งใหม่, DM undo ชื่อ → undo การวาง → redo ×2 (ผู้เล่นเห็นทุกขั้น), จบเซสชัน → ร่าง recap จาก log → เผยแพร่ → ผู้เล่นอ่านได้, event ลับไม่ขึ้นให้ผู้เล่น | ✅ (ผ่าน 8 จาก 9 รอบ — 1 รอบ timeout หลัง restart server ทำซ้ำไม่ได้) |
+| E2E Phase 1–7 (regression) | ✅ |
+| `pnpm typecheck` ทั้ง 3 package | ✅ |
+
+**Error ที่พบและแก้แล้ว**
+
+1. Esc ในชีตทำให้โต๊ะยกเลิกการเลือกโทเคนด้วย (listener ลงทะเบียนใหม่ทุก render จึงทำงานหลัง Modal) → Modal จับ Esc ใน capture phase แล้วหยุด event
+2. ข้อความ "session has ended" หลุดจากร่าง recap (โพสต์หลังเวลา endedAt) → ขยายช่วงเวลาอ่าน log
+3. ร่าง recap ตัดชื่อเวทออกจาก label การทอย ("spell attack") → ตัดเฉพาะชื่อผู้ทอยที่นำหน้า
+
+**ข้อจำกัดที่ยังมี**
+
+- Undo เป็นของแต่ละคนและอยู่ในเบราว์เซอร์ (รีโหลดแล้วประวัติหาย); ไม่ครอบคลุม HP/conditions, "ซ่อน/เปิดหมอกทั้งหมด", การตั้งค่าฉาก
+- Concentration ติดตามเฉพาะตัวละครที่มีชีต (มอนสเตอร์จาก bestiary ยังไม่ติดตาม); ไม่ตัดสินผล save ให้อัตโนมัติ (ผู้เล่น/DM กด End เอง)
+- ร่าง recap เป็นการรวบรวมจาก log (ไม่ได้ใช้ AI เรียบเรียง)
 
 ---
 

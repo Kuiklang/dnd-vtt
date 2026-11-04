@@ -7,7 +7,7 @@ import { toast } from "../../stores/toast";
 import { useT } from "../../i18n";
 import { CharacterSheetLoader } from "../character/CharacterSheetLoader";
 import type { RollRequest } from "../lobby/useLobby";
-import type { SheetTable } from "../character/SpellActions";
+import { ConcentrationBadge, endConcentration, type SheetTable } from "../character/SpellActions";
 import { useTemplateStore } from "../templates/store";
 
 interface Props {
@@ -88,6 +88,13 @@ export function TokenRolls({ characterId, tick, myCharacterId, onRoll, visibilit
           ))}
         </div>
       </div>
+      {character.data.concentration && (
+        <ConcentrationBadge
+          spell={character.data.concentration.spell}
+          onSave={() => roll(d20(derived.savingThrows.con.value), `Concentration (Con save) — ${character.data.concentration!.spell}`, "save")}
+          onEnd={table && character.access !== "view" ? () => endConcentration(table.campaignId, characterId) : undefined}
+        />
+      )}
       <div className="flex gap-1 text-xs">
         {(["check", "save"] as const).map((k) => (
           <button

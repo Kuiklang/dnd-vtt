@@ -119,3 +119,14 @@ describe("AoE templates", () => {
     expect(templateShapeForArea("cube")).toBe("square");
   });
 });
+
+describe("concentration", () => {
+  it("save DC is 10 or half the damage, whichever is higher", async () => {
+    const { concentrationSaveDc } = await import("../src/index.js");
+    expect(concentrationSaveDc(1)).toBe(10);
+    expect(concentrationSaveDc(21)).toBe(10);
+    expect(concentrationSaveDc(22)).toBe(11);
+    expect(concentrationSaveDc(45)).toBe(22);
+    expect(concentrationSaveDc(-5)).toBe(10);
+  });
+});

@@ -60,14 +60,14 @@ Enums ใหม่: `asset_kind`, `token_layer`, `token_shape`, `fog_mode`
 | `map_layers` (custom), `map_objects`, `drawings` | 7 | ตอนนี้ layer เป็น enum บน token (map/objects/tokens/dm); custom layer + drawing tools มาภายหลัง |
 | `scenes`, `scene_templates` | 7 | snapshot ของ map+tokens+music+notes; template export/import JSON พร้อม schemaVersion |
 | `combats`, `combatants` | 4 | round/turn index, initiative, action economy JSONB, concentration |
-| `undo_history` | 7 | append-only operation log ต่อ entity type (command pattern: do/undo payload) |
+| `undo_history` | ภายหลัง | Phase 7 ทำ undo ฝั่ง client (ดู DECISIONS #49); ตารางนี้ใช้เมื่ออยากให้ประวัติอยู่รอดหลังรีโหลด |
 | `spells`, `items`, `homebrew_content` | 5–7 | SRD seed + user content; `source` และ licence field |
 | `rulesets` (custom) | 5 | base_ruleset_id + overrides JSONB (ใช้ `buildHomebrewRuleset`) |
 | `journals`, `handouts`, `random_tables` | 5 | visibility per entry + links (note ↔ map/character/item) |
 | `map_templates` | 7 ✅ | AoE template ต่อ scene: shape enum (circle/cone/line/square), x/y (px), size/width (ft), angle (องศา), color, label, hidden, owner_id; สูงสุด 60 ต่อ scene |
 | `scenes.music` (jsonb) | 7 ✅ | `{kind: "playlist" \| "track", id}` — เริ่มเล่นเมื่อแสดงฉาก (migration `0005_phase7_spells_templates.sql`) |
 | `audio_tracks`, `playlists`, `campaign_audio` | 6 ✅ | track: asset_id, category (music/ambient/sfx), tags, duration_sec; playlist: track_ids uuid[] + version; campaign_audio: สถานะการเล่นปัจจุบัน (jsonb, 1 แถวต่อแคมเปญ) |
-| `session_recaps`, `timeline_events` | 7 | เชื่อม game_sessions; recap มีสถานะ draft/approved |
+| `game_sessions.recap` / `recap_published`, `timeline_events` | 7 ✅ | recap เป็นคอลัมน์ของเซสชัน (ร่าง/เผยแพร่); timeline_events: title, body, in_world_date (ข้อความอิสระ), session_id, sort_key, visibility (players/dm) — migration `0006_phase7b_recap_timeline.sql` |
 
 `permission` overrides ปัจจุบันเก็บใน `campaigns.settings.permissions` (ผ่าน `sanitizePermissionOverrides`)
 ถ้าต้องการ permission ระดับ entity (เช่น token ทีละตัว) จะเพิ่มตาราง `entity_permissions` ใน Phase 2

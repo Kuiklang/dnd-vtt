@@ -4,7 +4,7 @@ import { Button, Textarea, cx } from "../../components/ui";
 import { mod, newId } from "./format";
 import { NumberField, RollButton, Section, SourceTag, TextField } from "./fields";
 import type { SetData } from "./CharacterSheet";
-import { CastButton, GiveButton, LastCast, SrdSpellPicker, srdArea, type SheetActions } from "./SpellActions";
+import { CastButton, ConcentrationBadge, GiveButton, LastCast, SrdSpellPicker, endConcentration, srdArea, type SheetActions } from "./SpellActions";
 
 type Derived = ReturnType<typeof deriveCharacter>;
 type Roll = ((formula: string, label: string, rollType: string, d20?: boolean) => void) | undefined;
@@ -80,6 +80,21 @@ export function SpellsSection({ data, derived, editable, setData, roll, d20, act
         )}
       </Section>
       <Section title="Spells" actions={editable && <SrdSpellPicker data={data} onAdd={(entry) => setData((x) => (x.spellcasting.spells.push(entry), x))} />}>
+        {data.concentration && (
+          <div className="mb-2">
+            <ConcentrationBadge
+              spell={data.concentration.spell}
+              onSave={roll && (() => roll(d20(derived.savingThrows.con.value), `Concentration (Con save) — ${data.concentration!.spell}`, "save"))}
+              onEnd={
+                actions
+                  ? () => actions.before().then(() => endConcentration(actions.table.campaignId, actions.characterId)).then(actions.after)
+                  : editable
+                    ? async () => setData((x) => ((x.concentration = null), x))
+                    : undefined
+              }
+            />
+          </div>
+        )}
         {actions && <LastCast characterId={actions.characterId} onMap={actions.table.onMap} />}
         {sc.spells.length === 0 && <p className="text-sm text-parchment-500">No spells yet.</p>}
         {byLevel.map((list, lvl) =>

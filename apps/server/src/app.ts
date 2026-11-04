@@ -28,6 +28,8 @@ import { sheetImportRoutes } from "./import/routes.js";
 import { sceneRoutes } from "./scenes/routes.js";
 import { dmToolRoutes } from "./dmtools/routes.js";
 import { DmToolsService } from "./dmtools/service.js";
+import { TimelineService } from "./timeline/service.js";
+import { timelineRoutes } from "./timeline/routes.js";
 import { AudioService } from "./audio/service.js";
 import { audioRoutes } from "./audio/routes.js";
 import { CharacterActions } from "./characters/actions.js";
@@ -59,6 +61,7 @@ export async function buildApp(
     scenes: new SceneService(db, campaigns, assets),
     combat: new CombatService(db, chat),
     dmTools: new DmToolsService(db, campaigns, assets, chat),
+    timeline: new TimelineService(db),
     audio: new AudioService(db),
     actions: new CharacterActions(db, chat),
   };
@@ -122,6 +125,7 @@ export async function buildApp(
   await app.register(dmToolRoutes);
   await app.register(audioRoutes);
   await app.register(characterActionRoutes);
+  await app.register(timelineRoutes);
   await app.register(sheetImportRoutes, { extractor: opts.sheetExtractor !== undefined ? opts.sheetExtractor : extractorFromConfig(config) });
 
   if (config.WEB_DIST && existsSync(config.WEB_DIST)) {

@@ -175,7 +175,8 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
   );
 
   const updateToken = useCallback(
-    async (id: string, patch: TokenInput) => {
+    /** Resolves true when the server kept the change, false when it was refused (and rolled back). */
+    async (id: string, patch: TokenInput): Promise<boolean> => {
       const before = tokensRef.current.get(id);
       if (before) {
         const { stats: _stats, ...visible } = patch;
@@ -188,10 +189,12 @@ export function useTable(campaignId: string, isGM: boolean, connected: boolean) 
           if (cur && cur.version > t.version) return m;
           return new Map(m).set(id, t);
         });
+        return true;
       } catch (e) {
         // Roll back the optimistic change.
         if (before) setTokens((m) => new Map(m).set(id, before));
         toast.error(errorMessage(e));
+        return false;
       }
     },
     [ref, track],

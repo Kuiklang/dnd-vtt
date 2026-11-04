@@ -34,6 +34,8 @@ export interface CastResult {
   spell: { name: string; level: number; srdId: string; concentration: boolean };
   slotLevel: number;
   slotSpent: boolean;
+  /** The sheet changed (slot spent or concentration started). */
+  changed: boolean;
   plan: SpellCastPlan | null;
   saveDc: number | null;
   save: string | null;
@@ -67,7 +69,7 @@ export class CharacterActions {
     if (!ruleset) throw badRequest("Unknown ruleset");
 
     // Spend the slot under a row lock.
-    const { row, entry, slotLevel, slotSpent } = await this.db.transaction(async (tx) => {
+    const { row, entry, slotLevel, slotSpent, dropped } = await this.db.transaction(async (tx) => {
       const [row] = await tx.select().from(characters).where(eq(characters.id, characterId)).for("update");
       const data = structuredClone(row!.data) as CharacterData;
       const entry = data.spellcasting.spells.find((s) => s.id === input.spellId);
@@ -84,13 +86,19 @@ export class CharacterActions {
       } else if (input.ritual && !entry.ritual) {
         throw badRequest(`${entry.name} can't be cast as a ritual`);
       }
-      if (!slotSpent) return { row: row!, entry, slotLevel, slotSpent };
+      // Casting a concentration spell ends any earlier concentration.
+      let dropped: string | null = null;
+      if (entry.concentration) {
+        dropped = data.concentration && data.concentration.spell !== entry.name ? data.concentration.spell : null;
+        data.concentration = { spell: entry.name, spellId: entry.id, since: new Date().toISOString() };
+      }
+      if (!slotSpent && !entry.concentration) return { row: row!, entry, slotLevel, slotSpent, dropped };
       const [updated] = await tx
         .update(characters)
         .set({ data, version: row!.version + 1, updatedAt: new Date() })
         .where(eq(characters.id, characterId))
         .returning();
-      return { row: updated!, entry, slotLevel, slotSpent };
+      return { row: updated!, entry, slotLevel, slotSpent, dropped };
     });
 
     const derived = deriveCharacter(row.data, ruleset);
@@ -105,7 +113,10 @@ export class CharacterActions {
     const levelText = entry.level === 0 ? "" : input.ritual ? " as a ritual" : ` at ${ORDINAL[slotLevel]} level`;
     const saveText = srd?.save && saveDc !== null ? ` — DC ${saveDc} ${ABILITY_NAME[srd.save]} save${srd.halfOnSave ? " (half on success)" : ""}` : "";
     const areaText = srd?.area ? ` — ${srd.area.sizeFt}-ft ${srd.area.shape}` : "";
-    await this.chat.system(m.campaign.id, `${row.name} casts ${entry.name}${levelText}${saveText}${areaText}${entry.concentration ? " (concentration)" : ""}`);
+    // A hidden cast (DM-only rolls) is announced to the DM only, so players learn nothing from the log.
+    const dmOnly = input.visibility === "dm_only";
+    if (dropped) await this.chat.system(m.campaign.id, `${row.name} stops concentrating on ${dropped}`, { dmOnly });
+    await this.chat.system(m.campaign.id, `${row.name} casts ${entry.name}${levelText}${saveText}${areaText}${entry.concentration ? " (concentration)" : ""}`, { dmOnly });
 
     const rolls: RollDto[] = [];
     const roll = async (formula: string, label: string, rollType: string) => {
@@ -128,12 +139,38 @@ export class CharacterActions {
       spell: { name: entry.name, level: entry.level, srdId: entry.srdId, concentration: entry.concentration },
       slotLevel,
       slotSpent,
+      changed: slotSpent || entry.concentration,
       plan,
       saveDc,
       save: srd?.save ?? null,
       area: srd?.area ?? null,
       rolls,
     };
+  }
+
+  /**
+   * Ends concentration: the character's controller, or the DM for any character at the table
+   * (e.g. after a failed save the DM rolled).
+   */
+  async endConcentration(m: Membership, characterId: string): Promise<{ id: string; name: string; spell: string } | null> {
+    let allowed = false;
+    try {
+      await this.actingCharacter(m, characterId);
+      allowed = true;
+    } catch {
+      allowed = m.caps.has("token.manageAll") && (await this.recipients(m)).some((c) => c.id === characterId);
+    }
+    if (!allowed) throw forbidden("You can't change this character");
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx.select().from(characters).where(eq(characters.id, characterId)).for("update");
+      if (!row) throw notFound("Character");
+      const data = structuredClone(row.data) as CharacterData;
+      const spell = data.concentration?.spell;
+      if (!spell) return null;
+      data.concentration = null;
+      await tx.update(characters).set({ data, version: row.version + 1, updatedAt: new Date() }).where(eq(characters.id, row.id));
+      return { id: row.id, name: row.name, spell };
+    });
   }
 
   /** Characters an item can be handed to: everyone's active character, plus NPCs for the DM. */

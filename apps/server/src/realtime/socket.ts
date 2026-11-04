@@ -486,8 +486,14 @@ export class Realtime {
       const m = await campaigns.membership(i.campaignId, data.userId);
       const res = await combat.applyHp(m, i.tokenId, i.action);
       await this.applyEffects(i.campaignId, res.fx);
+      const c = res.concentration;
+      if (c)
+        await this.ctx.chat.system(
+          i.campaignId,
+          c.ended ? `${c.name} drops to 0 HP and loses concentration on ${c.spell}` : `${c.name} must make a DC ${c.dc} Constitution save to keep concentrating on ${c.spell}`,
+        );
       await this.broadcastCombat(i.campaignId);
-      return { token: res.token, notes: res.notes, effective: res.effective };
+      return { token: res.token, notes: res.notes, effective: res.effective, concentration: res.concentration };
     });
 
     this.handle(s, "token:conditions", campaignIdSchema.extend({ tokenId: z.uuid(), conditions: z.array(tokenConditionSchema).max(30) }), async (i) => {

@@ -3,6 +3,7 @@ import {
   FRESH_ACTIONS,
   NO_DEFENSES,
   applyHp,
+  concentrationSaveDc,
   deriveCharacter,
   firstTurn,
   getBuiltinRuleset,
@@ -61,6 +62,14 @@ const effects = (): CombatEffects => ({ tokenIds: new Set(), characterIds: new S
 interface Loaded {
   combat: CombatRow;
   rows: Array<{ c: CombatantRow; token: TokenRow | null; character: LinkedCharacter | null }>;
+}
+
+/** A concentrating caster took damage: they roll a Con save against `dc` (or lost it at 0 HP). */
+export interface ConcentrationCheck {
+  name: string;
+  spell: string;
+  dc: number;
+  ended: boolean;
 }
 
 export class CombatService {
@@ -428,7 +437,11 @@ export class CombatService {
    * Applies damage/healing/temp HP (rules engine) or a DM "set" override.
    * HP lives on the linked character sheet when there is one, else on the token.
    */
-  async applyHp(m: Membership, tokenId: string, action: HpAction): Promise<{ token: TokenDto; notes: string[]; effective: number; fx: CombatEffects }> {
+  async applyHp(
+    m: Membership,
+    tokenId: string,
+    action: HpAction,
+  ): Promise<{ token: TokenDto; notes: string[]; effective: number; fx: CombatEffects; concentration: ConcentrationCheck | null }> {
     const { token, character, isGM } = await this.tokenWithCharacter(m, tokenId);
     if (action.kind === "set" && !isGM) throw forbidden("Only the DM can set HP directly");
     const fx = effects();
@@ -437,8 +450,14 @@ export class CombatService {
     if (!vitalsHp && action.kind !== "set") throw badRequest("This token doesn't track HP yet. Set its max HP first.");
     const defenses = character?.data.defenses ?? token.stats?.defenses ?? NO_DEFENSES;
     const result = applyHp(vitalsHp ?? { current: 0, max: 0, temp: 0 }, action, defenses);
+    // Damage to a concentrating caster calls for a Con save; dropping to 0 HP ends it outright.
+    let concentration: ConcentrationCheck | null = null;
+    const focus = character?.data.concentration;
+    if (focus && action.kind === "damage" && result.effectiveAmount > 0) {
+      concentration = { name: token.name, spell: focus.spell, dc: concentrationSaveDc(result.effectiveAmount), ended: result.hp.current <= 0 };
+    }
     if (character && token.characterId) {
-      await this.writeCharacter(token.characterId, (d) => ({ ...d, hp: result.hp }));
+      await this.writeCharacter(token.characterId, (d) => ({ ...d, hp: result.hp, ...(concentration?.ended ? { concentration: null } : {}) }));
       fx.characterIds.add(token.characterId);
     } else {
       const stats: TokenStats = token.stats ?? { hp: result.hp, ac: null, initiativeBonus: 0, conditions: [], defenses: NO_DEFENSES };
@@ -450,7 +469,7 @@ export class CombatService {
       if (combat) await this.db.update(combatants).set({ defeated: true }).where(and(eq(combatants.combatId, combat.id), eq(combatants.tokenId, token.id)));
     }
     const dto = await this.tokenDtoFor(token.id, m);
-    return { token: dto, notes: result.notes, effective: result.effectiveAmount, fx };
+    return { token: dto, notes: result.notes, effective: result.effectiveAmount, fx, concentration };
   }
 
   async setConditions(m: Membership, tokenId: string, conditions: TokenCondition[]): Promise<{ token: TokenDto; fx: CombatEffects }> {

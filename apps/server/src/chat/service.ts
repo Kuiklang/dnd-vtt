@@ -150,10 +150,11 @@ export class ChatService {
     return dto;
   }
 
-  async system(campaignId: string, content: string): Promise<ChatMessageDto> {
+  /** A server notice in the log; `dmOnly` puts it in the DM channel (e.g. a hidden NPC's spell). */
+  async system(campaignId: string, content: string, opts: { dmOnly?: boolean } = {}): Promise<ChatMessageDto> {
     const [row] = await this.db
       .insert(chatMessages)
-      .values({ campaignId, channel: "system", content: content.slice(0, MAX_CHAT_LENGTH) })
+      .values({ campaignId, channel: opts.dmOnly ? "dm" : "system", content: content.slice(0, MAX_CHAT_LENGTH) })
       .returning();
     const dto = this.toDto(row!, null, null);
     this.realtime()?.broadcastChat(dto);

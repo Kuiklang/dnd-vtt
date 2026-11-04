@@ -204,6 +204,14 @@ function FeedRow({
   if (item.channel === "system") {
     return <p className="py-1 text-center text-xs text-parchment-500">— {item.content} —</p>;
   }
+  if (item.channel === "dm" && !item.senderId) {
+    // A server notice only the DM can see (e.g. a hidden NPC's spell).
+    return (
+      <p className="py-1 text-center text-xs text-arcane-400">
+        — {item.content} — <span className="uppercase tracking-wide">DM only</span>
+      </p>
+    );
+  }
   const mine = item.senderId === myId;
   return (
     <div className={cx("group text-sm", CHANNEL_STYLE[item.channel])}>
