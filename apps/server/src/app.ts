@@ -37,6 +37,8 @@ import { AudioService } from "./audio/service.js";
 import { audioRoutes } from "./audio/routes.js";
 import { CharacterActions } from "./characters/actions.js";
 import { characterActionRoutes } from "./characters/actionRoutes.js";
+import { CampaignPackService } from "./packs/service.js";
+import { packRoutes } from "./packs/routes.js";
 
 export async function buildApp(
   config: Config,
@@ -70,6 +72,7 @@ export async function buildApp(
     timeline: new TimelineService(db),
     audio: new AudioService(db),
     actions: new CharacterActions(db, chat),
+    packs: new CampaignPackService(db, campaigns, assets),
   };
   app.decorate("ctx", ctx);
   app.decorateRequest("auth", null);
@@ -133,6 +136,7 @@ export async function buildApp(
   await app.register(dmToolRoutes);
   await app.register(audioRoutes);
   await app.register(characterActionRoutes);
+  await app.register(packRoutes);
   await app.register(timelineRoutes);
   await app.register(sheetImportRoutes, { extractor: opts.sheetExtractor !== undefined ? opts.sheetExtractor : extractorFromConfig(config) });
   await app.register(aiRoutes, { model: opts.aiModel !== undefined ? opts.aiModel : textModelFromConfig(config) });

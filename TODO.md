@@ -173,3 +173,8 @@
 - [ ] แปลภาษาไทยหน้าที่เหลือ (Lobby, Dashboard, Character sheet) — ดูหัวข้อ i18n ด้านบน
 - [ ] Accessibility pass (keyboard บน canvas, screen reader)
 - [ ] สำรองข้อมูลอัตโนมัติ (ตอนนี้ copy โฟลเดอร์ `data` เอง)
+
+## Campaign packs ✅
+- [x] นำเข้าแคมเปญจากไฟล์ .zip (campaign.json + รูป) — ดู docs/CAMPAIGN_PACKS.md
+- [x] ปุ่ม "Import campaign (.zip)" ในหน้า Dashboard
+- [ ] ส่งออกแคมเปญเป็น .zip (export) — ยังไม่ทำ
