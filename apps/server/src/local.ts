@@ -38,6 +38,8 @@ async function startDatabase(): Promise<{ url: string; stop(): Promise<void> }> 
     persistent: true,
     // Only this computer can reach the database.
     postgresFlags: ["-c", "listen_addresses=localhost"],
+    // UTF-8 regardless of the PC's language (Windows would otherwise use its code page).
+    initdbFlags: ["--encoding=UTF8", "--lc-collate=C", "--lc-ctype=C"],
     onLog: () => {},
     onError: (e: unknown) => {
       const s = String(e instanceof Error ? e.message : e);
@@ -49,12 +51,10 @@ async function startDatabase(): Promise<{ url: string; stop(): Promise<void> }> 
     await pg.initialise();
   }
   await pg.start();
-  try {
-    await pg.createDatabase("vtt");
-  } catch {
-    /* already there */
-  }
-  return { url: `postgres://vtt:${encodeURIComponent(password)}@localhost:${port}/vtt`, stop: () => pg.stop() };
+  const base = `postgres://vtt:${encodeURIComponent(password)}@localhost:${port}`;
+  const { ensureUtf8Database } = await import("./db/utf8.js");
+  await ensureUtf8Database(`${base}/postgres`, "vtt", say);
+  return { url: `${base}/vtt`, stop: () => pg.stop() };
 }
 
 function lanAddresses(): string[] {
