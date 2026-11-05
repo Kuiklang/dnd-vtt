@@ -22,5 +22,5 @@ echo  2. Below, find the line with  https://something.trycloudflare.com
 echo  3. Send that link to your friends. It changes every time you run this.
 echo  Close this window to stop sharing.
 echo.
-cloudflared tunnel --no-autoupdate --url http://localhost:3001
+cloudflared tunnel --no-autoupdate --url http://127.0.0.1:3001
 pause
