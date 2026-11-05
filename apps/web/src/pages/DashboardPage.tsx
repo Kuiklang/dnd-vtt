@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { DEFAULT_RULESET_ID, ROLE_LABELS, getBuiltinRuleset } from "@vtt/rules";
 import { api, errorMessage } from "../lib/api";
+import { postMultipart } from "../lib/upload";
 import type { CharacterFull, DashboardCampaign, PublicCampaign } from "../lib/types";
 import { useAsync } from "../lib/useAsync";
 import { useAuth } from "../stores/auth";
@@ -55,9 +56,12 @@ export function DashboardPage() {
               </Button>
             </span>
           ) : (
-            <Link to="/campaigns/new">
-              <Button variant="primary">+ New campaign</Button>
-            </Link>
+            <>
+              <ImportCampaignButton />
+              <Link to="/campaigns/new">
+                <Button variant="primary">+ New campaign</Button>
+              </Link>
+            </>
           )}
         </div>
       </div>
@@ -288,5 +292,45 @@ function CharacterLibrary() {
         </ul>
       )}
     </Card>
+  );
+}
+
+interface PackSummary {
+  campaignId: string;
+  name: string;
+  scenes: number;
+  tokens: number;
+  statBlocks: number;
+  journal: number;
+}
+
+/** Uploads a campaign pack (.zip with campaign.json + images) and opens the new campaign. */
+function ImportCampaignButton() {
+  const navigate = useNavigate();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  const onFile = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const { summary } = await postMultipart<{ summary: PackSummary }>("/api/campaigns/import", {}, file);
+      toast.success(`Imported "${summary.name}": ${summary.scenes} scenes, ${summary.tokens} tokens, ${summary.statBlocks} sheets, ${summary.journal} journal entries`);
+      navigate(`/campaigns/${summary.campaignId}`);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  return (
+    <>
+      <input ref={fileRef} type="file" accept=".zip,application/zip" hidden onChange={(e) => void onFile(e.target.files?.[0])} />
+      <Button onClick={() => fileRef.current?.click()} loading={busy} title="Create a campaign from a campaign pack (.zip with campaign.json, maps and tokens)">
+        Import campaign (.zip)
+      </Button>
+    </>
   );
 }

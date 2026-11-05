@@ -13,6 +13,7 @@ import type { DmToolsService } from "./dmtools/service.js";
 import type { TimelineService } from "./timeline/service.js";
 import type { AudioService } from "./audio/service.js";
 import type { CharacterActions } from "./characters/actions.js";
+import type { CampaignPackService } from "./packs/service.js";
 
 export interface AppContext {
   config: Config;
@@ -28,6 +29,7 @@ export interface AppContext {
   timeline: TimelineService;
   audio: AudioService;
   actions: CharacterActions;
+  packs: CampaignPackService;
   /** Set once Socket.IO is attached; services use it to broadcast REST-originated changes. */
   realtime?: Realtime;
 }
